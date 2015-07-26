@@ -1,6 +1,7 @@
 package com.alibaba.middleware.race.rpc.api.netty;
 
 import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
+import com.alibaba.middleware.race.rpc.api.Logger;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
@@ -25,7 +26,7 @@ public class ClientRpcHandler extends SimpleChannelInboundHandler<RpcResponse> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RpcResponse response) throws Exception {
-        System.out.println("[receive response]" + response);
+        Logger.info("[receive response]" + response);
         if (listener != null) {
             if (response.hasException()) {
                 listener.onException(response.exception());

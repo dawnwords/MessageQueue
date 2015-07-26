@@ -1,5 +1,6 @@
 package com.alibaba.middleware.race.rpc.api.netty;
 
+import com.alibaba.middleware.race.rpc.api.Logger;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -25,7 +26,7 @@ public class ClientTimeoutHandler extends ReadTimeoutHandler {
         if (listener != null) {
             listener.onTimeout();
         }
-        System.out.println("[client read time out]");
+        Logger.info("[client read time out]");
         ctx.close();
     }
 }
