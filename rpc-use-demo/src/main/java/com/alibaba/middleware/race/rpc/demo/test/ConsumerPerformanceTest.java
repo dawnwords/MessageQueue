@@ -14,17 +14,18 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Created by huangsheng.hs on 2015/5/19.
  */
-public class ConsumerPerformanceTest extends ConsumerTest{
+public class ConsumerPerformanceTest extends ConsumerTest {
     private static AtomicLong callAmount = new AtomicLong(0L);
     private static OutputStream outputStream;
     private static Method performanceTestMethod;
     private static ConsumerBuilder consumerBuilder;
     private static CountDownLatch countDownLatch;
+
     public static void main(String[] args) throws IOException {
         try {
             consumerBuilder = new ConsumerBuilder();
             outputStream = getPerformanceOutputStream();
-            performanceTestMethod = consumerBuilder.getClass().getDeclaredMethod("pressureTest",null);
+            performanceTestMethod = consumerBuilder.getClass().getDeclaredMethod("pressureTest");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -33,18 +34,15 @@ public class ConsumerPerformanceTest extends ConsumerTest{
         long startTime = System.currentTimeMillis();
 
         final ExecutorService executor = Executors.newFixedThreadPool(coreCount);
-        for(int i = 0 ; i < coreCount ; i++){
+        for (int i = 0; i < coreCount; i++) {
             executor.execute(new Runnable() {
                 @Override
                 public void run() {
-                    while(callAmount.get() < 1000000){
+                    while (callAmount.get() < 10000) {
                         try {
-                            if((Boolean)performanceTestMethod.invoke(consumerBuilder,null))
+                            if ((Boolean) performanceTestMethod.invoke(consumerBuilder))
                                 callAmount.incrementAndGet();
-                            else
-                                continue;
-                        } catch (Exception e) {
-                            continue;
+                        } catch (Exception ignored) {
                         }
                     }
                     countDownLatch.countDown();
@@ -56,14 +54,12 @@ public class ConsumerPerformanceTest extends ConsumerTest{
         } catch (InterruptedException e) {
             //DO Nothing
         }
-        if(callAmount.intValue() < 1000000)
+        if (callAmount.intValue() < 10000)
             outputStream.write("Doesn't finish all invoking.".getBytes());
         else {
             long endTime = System.currentTimeMillis();
             Float tps = (float) callAmount.get() / (float) (endTime - startTime) * 1000F;
-            StringBuilder sb = new StringBuilder();
-            sb.append("tps:").append(tps);
-            outputStream.write(sb.toString().getBytes());
+            outputStream.write(("tps:" + tps).getBytes());
             outputStream.close();
         }
     }

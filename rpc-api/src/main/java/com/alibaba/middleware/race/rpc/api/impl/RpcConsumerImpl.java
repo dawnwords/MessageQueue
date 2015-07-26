@@ -6,6 +6,7 @@ import com.alibaba.middleware.race.rpc.api.RpcConsumer;
 import com.alibaba.middleware.race.rpc.api.netty.ClientRpcHandler;
 import com.alibaba.middleware.race.rpc.api.netty.ClientTimeoutHandler;
 import com.alibaba.middleware.race.rpc.api.codec.SerializeType;
+import com.alibaba.middleware.race.rpc.api.util.NumberedThreadFactory;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
 import com.alibaba.middleware.race.rpc.async.ResponseFuture;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -94,15 +96,6 @@ public class RpcConsumerImpl extends RpcConsumer {
         return null;
     }
 
-    private static void close(Closeable closeable) {
-        if (closeable != null) {
-            try {
-                closeable.close();
-            } catch (IOException ignored) {
-            }
-        }
-    }
-
     private class RpcCallable implements Callable<Object> {
         private RpcRequest rpcRequest;
 
@@ -132,22 +125,29 @@ public class RpcConsumerImpl extends RpcConsumer {
 
     }
 
-    private void sendRpcRequest(RpcRequest request, ResponseCallbackListener listener) {
-        EventLoopGroup group = new NioEventLoopGroup();
-        try {
-            Channel channel = new Bootstrap()
-                    .group(group)
-                    .channel(NioSocketChannel.class)
-                    .handler(new Initializer(request, listener))
-                    .connect(System.getProperty("SIP", Parameter.SERVER_IP), Parameter.SERVER_PORT)
-                    .sync()
-                    .channel();
-            channel.writeAndFlush(request).sync();
-            channel.closeFuture().sync();
-        } catch (InterruptedException ignored) {
-        } finally {
-            group.shutdownGracefully();
-        }
+    private void sendRpcRequest(final RpcRequest request, ResponseCallbackListener listener) {
+        final EventLoopGroup group = new NioEventLoopGroup(1, new NumberedThreadFactory("NettyClientSelector"));
+        new Bootstrap().group(group).channel(NioSocketChannel.class)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .option(ChannelOption.SO_KEEPALIVE, false)
+                .handler(new Initializer(request, listener))
+                .connect(System.getProperty("SIP", Parameter.SERVER_IP), Parameter.SERVER_PORT)
+                .addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(ChannelFuture future) throws Exception {
+                        future.channel().writeAndFlush(request).addListener(new ChannelFutureListener() {
+                            @Override
+                            public void operationComplete(ChannelFuture future) throws Exception {
+                                future.channel().closeFuture().addListener(new ChannelFutureListener() {
+                                    @Override
+                                    public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                                        group.shutdownGracefully();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
     }
 
     @ChannelHandler.Sharable

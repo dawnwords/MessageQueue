@@ -1,6 +1,6 @@
 package com.alibaba.middleware.race.rpc.api.netty;
 
-import com.alibaba.middleware.race.rpc.api.Logger;
+import com.alibaba.middleware.race.rpc.api.util.Logger;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
 import io.netty.channel.*;
