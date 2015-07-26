@@ -1,5 +1,6 @@
 package com.alibaba.middleware.race.rpc.api.netty;
 
+import com.alibaba.middleware.race.rpc.api.Logger;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
 import io.netty.channel.*;
@@ -13,7 +14,6 @@ import java.lang.reflect.Method;
  */
 @ChannelHandler.Sharable
 public class ServerRpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
-
     private Class<?> serviceInterface;
     private Object serviceInstance;
     private String version;
@@ -27,7 +27,7 @@ public class ServerRpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RpcRequest request) throws Exception {
         request.restoreContext();
-        System.out.println("[receive request]" + request);
+        Logger.info("[receive request]" + request);
         RpcResponse response = new RpcResponse();
 
         if (version != null && !version.equals(request.version())) {
@@ -51,7 +51,7 @@ public class ServerRpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
     }
 
     private void writeResponse(ChannelHandlerContext ctx, RpcResponse response) {
-        System.out.println("[send response]" + response);
+        Logger.info("[send response]" + response);
         ctx.writeAndFlush(response);
         ctx.close();
     }
