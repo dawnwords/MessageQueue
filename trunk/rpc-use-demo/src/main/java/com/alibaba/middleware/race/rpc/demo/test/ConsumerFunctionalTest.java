@@ -20,7 +20,7 @@ public class ConsumerFunctionalTest extends ConsumerTest{
                     StringBuilder sb = new StringBuilder();
                     sb.append(method.getName()).append(":");
                     try {
-                        method.invoke(consumerBuilder, null);
+                        method.invoke(consumerBuilder);
                         sb.append("pass").append("\r\n");
                     } catch (Exception e) {
                         sb.append(ExceptionUtil.getStackTrace(e)).append("\r\n");
