@@ -6,7 +6,6 @@ import com.alibaba.middleware.race.rpc.api.RpcConsumer;
 import com.alibaba.middleware.race.rpc.api.netty.ClientRpcHandler;
 import com.alibaba.middleware.race.rpc.api.netty.ClientTimeoutHandler;
 import com.alibaba.middleware.race.rpc.api.codec.SerializeType;
-import com.alibaba.middleware.race.rpc.api.util.NumberedThreadFactory;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
 import com.alibaba.middleware.race.rpc.async.ResponseFuture;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
@@ -16,13 +15,11 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.util.concurrent.DefaultThreadFactory;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -126,7 +123,7 @@ public class RpcConsumerImpl extends RpcConsumer {
     }
 
     private void sendRpcRequest(final RpcRequest request, ResponseCallbackListener listener) {
-        final EventLoopGroup group = new NioEventLoopGroup(1, new NumberedThreadFactory("NettyClientSelector"));
+        final EventLoopGroup group = new NioEventLoopGroup(1, new DefaultThreadFactory("NettyClientSelector"));
         new Bootstrap().group(group).channel(NioSocketChannel.class)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.SO_KEEPALIVE, false)
