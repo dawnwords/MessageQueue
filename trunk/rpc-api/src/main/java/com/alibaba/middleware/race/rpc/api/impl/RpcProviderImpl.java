@@ -4,7 +4,6 @@ import com.alibaba.middleware.race.rpc.api.Parameter;
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
 import com.alibaba.middleware.race.rpc.api.codec.SerializeType;
 import com.alibaba.middleware.race.rpc.api.netty.ServerRpcHandler;
-import com.alibaba.middleware.race.rpc.api.util.NumberedThreadFactory;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -12,10 +11,9 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
+import io.netty.util.concurrent.DefaultThreadFactory;
 
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -29,7 +27,7 @@ public class RpcProviderImpl extends RpcProvider {
     private Object serviceInstance;
     private DefaultEventExecutorGroup defaultEventExecutorGroup =
             new DefaultEventExecutorGroup(Parameter.SERVER_WORKER_THREADS,
-                    new NumberedThreadFactory("NettyServerWorkerThread"));
+                    new DefaultThreadFactory("NettyServerWorkerThread"));
 
     @Override
     public RpcProvider serviceInterface(Class<?> serviceInterface) {
@@ -70,8 +68,9 @@ public class RpcProviderImpl extends RpcProvider {
 
         @Override
         public void run() {
-            final EventLoopGroup bossGroup = new NioEventLoopGroup(1, new NumberedThreadFactory("NettyBossSelector"));
-            final EventLoopGroup workerGroup = new NioEventLoopGroup(Parameter.SERVER_SELECTOR_THREADS, new NumberedThreadFactory("NettyServerSelector"));
+            final EventLoopGroup bossGroup = new NioEventLoopGroup(1, new DefaultThreadFactory("NettyBossSelector"));
+            final EventLoopGroup workerGroup = new NioEventLoopGroup(
+                    Parameter.SERVER_SELECTOR_THREADS, new DefaultThreadFactory("NettyServerSelector"));
             new ServerBootstrap()
                     .group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel.class)
