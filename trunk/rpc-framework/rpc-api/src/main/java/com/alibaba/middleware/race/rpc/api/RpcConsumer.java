@@ -80,7 +80,7 @@ public class RpcConsumer implements InvocationHandler {
      * @param methodName
      */
     public void asynCall(String methodName) {
-        asynCall(methodName, ResponseCallbackListener.NULL);
+        asynCall(methodName, null);
     }
 
     /**

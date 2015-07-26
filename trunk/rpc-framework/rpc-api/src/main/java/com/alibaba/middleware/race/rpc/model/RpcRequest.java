@@ -56,8 +56,9 @@ public class RpcRequest implements Serializable {
         return arguments;
     }
 
-    public void restoreContext() {
+    public RpcRequest restoreContext() {
         RpcContext.props = props;
+        return this;
     }
 
     @Override
