@@ -3,16 +3,23 @@ package com.alibaba.middleware.race.rpc.api.impl;
 import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
 import com.alibaba.middleware.race.rpc.api.Parameter;
 import com.alibaba.middleware.race.rpc.api.RpcConsumer;
-import com.alibaba.middleware.race.rpc.api.serializer.SerializeType;
+import com.alibaba.middleware.race.rpc.api.netty.ClientRpcHandler;
+import com.alibaba.middleware.race.rpc.api.netty.ClientTimeoutHandler;
+import com.alibaba.middleware.race.rpc.api.codec.SerializeType;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
 import com.alibaba.middleware.race.rpc.async.ResponseFuture;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.Serializable;
 import java.lang.reflect.Method;
-import java.net.Socket;
 import java.util.concurrent.*;
 
 /**
@@ -52,6 +59,11 @@ public class RpcConsumerImpl extends RpcConsumer {
     public RpcConsumer hook(ConsumerHook hook) {
         this.hook = hook;
         return this;
+    }
+
+    @Override
+    public void asynCall(String methodName) {
+        asynCall(methodName, new SynchroCallbackListener());
     }
 
     @Override
@@ -104,43 +116,90 @@ public class RpcConsumerImpl extends RpcConsumer {
                 hook.before(rpcRequest);
             }
 
-            Socket socket = null;
             RpcResponse response = null;
             ResponseCallbackListener listener = asynMap.get(rpcRequest.methodName());
-            try {
-                //TODO type & null check
-                socket = new Socket(Parameter.SERVER_IP, Parameter.SERVER_PORT);
-                socket.setSoTimeout(clientTimeout);
-                serializeType.serialize(rpcRequest, socket.getOutputStream());
-                response = (RpcResponse) serializeType.deserialize(socket.getInputStream());
-            } catch (Exception e) {
-                if (listener != null) {
-                    if (e.getMessage().contains("Time out")) {
-                        listener.onTimeout();
-                    } else {
-                        listener.onException(e);
-                    }
-                }
-            } finally {
-                close(socket);
+            if (listener == null) {
+                listener = new SynchroCallbackListener();
             }
 
-            if (hook != null) {
-                hook.after(rpcRequest);
-            }
+            sendRpcRequest(rpcRequest, listener);
 
-            if (listener == null || listener.equals(ResponseCallbackListener.NULL)) {
-                return response;
+            if (listener instanceof SynchroCallbackListener) {
+                response = ((SynchroCallbackListener) listener).rpcResponse();
             }
+            return response;
+        }
 
-            if (response != null) {
-                if (response.hasException()) {
-                    listener.onException(response.exception());
-                } else {
-                    listener.onResponse(response.appResponse());
-                }
-            }
-            return null;
+    }
+
+    private void sendRpcRequest(RpcRequest request, ResponseCallbackListener listener) {
+        EventLoopGroup group = new NioEventLoopGroup();
+        try {
+            Channel channel = new Bootstrap()
+                    .group(group)
+                    .channel(NioSocketChannel.class)
+                    .handler(new Initializer(request, listener))
+                    .connect(System.getProperty("SIP", Parameter.SERVER_IP), Parameter.SERVER_PORT)
+                    .sync()
+                    .channel();
+            channel.writeAndFlush(request).sync();
+            channel.closeFuture().sync();
+        } catch (InterruptedException ignored) {
+        } finally {
+            group.shutdownGracefully();
         }
     }
+
+    @ChannelHandler.Sharable
+    private class Initializer extends ChannelInitializer<SocketChannel> {
+
+        private final RpcRequest request;
+        private final ResponseCallbackListener listener;
+
+        public Initializer(RpcRequest request, ResponseCallbackListener listener) {
+            this.request = request;
+            this.listener = listener;
+        }
+
+        @Override
+        protected void initChannel(SocketChannel ch) throws Exception {
+            ChannelPipeline pipeline = ch.pipeline();
+            pipeline.addLast("timeout", new ClientTimeoutHandler(clientTimeout, listener));
+            pipeline.addLast("decoder", serializeType.deserializer());
+            pipeline.addLast("encoder", serializeType.serializer());
+            pipeline.addLast("handler", new ClientRpcHandler(listener, hook, request));
+        }
+    }
+
+    private class SynchroCallbackListener implements ResponseCallbackListener {
+
+        private CountDownLatch latch = new CountDownLatch(1);
+        private RpcResponse response = new RpcResponse();
+
+        @Override
+        public void onResponse(Object response) {
+            this.response.appResponse((Serializable) response);
+            latch.countDown();
+        }
+
+        @Override
+        public void onTimeout() {
+            latch.countDown();
+        }
+
+        @Override
+        public void onException(Exception e) {
+            this.response.exception(e);
+            latch.countDown();
+        }
+
+        public RpcResponse rpcResponse() {
+            try {
+                latch.await(clientTimeout, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ignored) {
+            }
+            return response;
+        }
+    }
+
 }

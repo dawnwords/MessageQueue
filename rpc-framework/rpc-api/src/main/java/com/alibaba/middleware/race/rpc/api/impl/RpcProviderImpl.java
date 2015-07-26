@@ -2,15 +2,16 @@ package com.alibaba.middleware.race.rpc.api.impl;
 
 import com.alibaba.middleware.race.rpc.api.Parameter;
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
-import com.alibaba.middleware.race.rpc.api.serializer.SerializeType;
-import com.alibaba.middleware.race.rpc.model.RpcRequest;
-import com.alibaba.middleware.race.rpc.model.RpcResponse;
+import com.alibaba.middleware.race.rpc.api.codec.SerializeType;
+import com.alibaba.middleware.race.rpc.api.netty.ServerRpcHandler;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.timeout.ReadTimeoutHandler;
 
-import java.io.*;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -55,66 +56,46 @@ public class RpcProviderImpl extends RpcProvider {
 
     @Override
     public void publish() {
-        ServerSocket socket = null;
-        try {
-            socket = new ServerSocket(Parameter.SERVER_PORT);
-            System.out.println("[start provider] at " + Parameter.SERVER_PORT);
-            while (true) {
-                Socket client = socket.accept();
-                client.setSoTimeout(timeout);
-                System.out.println("[client connected]:" + client.getInetAddress().getHostAddress());
-                new ClientHandler(client).start();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            close(socket);
-        }
+        new ProviderServer().start();
     }
 
-    private static void close(Closeable closeable) {
-        if (closeable != null) {
-            try {
-                closeable.close();
-            } catch (IOException ignored) {
-            }
-        }
-    }
-
-    private class ClientHandler extends Thread {
-        private Socket client;
-
-        public ClientHandler(Socket client) {
-            this.client = client;
-        }
+    private class ProviderServer extends Thread {
 
         @Override
         public void run() {
-            RpcResponse response = new RpcResponse();
+            EventLoopGroup bossGroup = new NioEventLoopGroup();
+            EventLoopGroup workerGroup = new NioEventLoopGroup();
             try {
-                RpcRequest request = (RpcRequest) serializeType.deserialize(client.getInputStream());
-                request.restoreContext();
-                System.out.printf("[receive request] from %s: %s\n",
-                        client.getInetAddress().getHostAddress(), request.toString());
-                if (version != null && !version.equals(request.version())) {
-                    throw new RuntimeException(
-                            String.format("version not match: provided: %s, given :%s", version, request.version()));
-                }
-                Method method = serviceInterface.getDeclaredMethod(request.methodName(), request.parameterTypes());
-                response.appResponse((Serializable) method.invoke(serviceInstance, request.arguments()));
-            } catch (InvocationTargetException e) {
-                response.exception(e.getTargetException());
-            } catch (Exception e) {
-                response.exception(e);
-            }
-
-            System.out.println("[send response]:" + response.toString());
-            try {
-                serializeType.serialize(response, client.getOutputStream());
-            } catch (Exception ignored) {
+                new ServerBootstrap()
+                        .group(bossGroup, workerGroup)
+                        .channel(NioServerSocketChannel.class)
+                        .childHandler(new Initializer())
+                        .option(ChannelOption.SO_BACKLOG, Parameter.BACKLOG_SIZE)
+                        .childOption(ChannelOption.SO_KEEPALIVE, true)
+                        .childOption(ChannelOption.TCP_NODELAY, true)
+                        .bind(Parameter.SERVER_PORT)
+                        .sync()
+                        .channel()
+                        .closeFuture()
+                        .sync();
+            } catch (InterruptedException ignored) {
             } finally {
-                close(client);
+                workerGroup.shutdownGracefully();
+                bossGroup.shutdownGracefully();
             }
+        }
+    }
+
+    @ChannelHandler.Sharable
+    private class Initializer extends ChannelInitializer<SocketChannel> {
+
+        @Override
+        protected void initChannel(SocketChannel ch) throws Exception {
+            ChannelPipeline pipeline = ch.pipeline();
+            pipeline.addLast("timeout", new ReadTimeoutHandler(timeout, TimeUnit.MILLISECONDS));
+            pipeline.addLast("decoder", serializeType.deserializer());
+            pipeline.addLast("encoder", serializeType.serializer());
+            pipeline.addLast("handler", new ServerRpcHandler(serviceInterface, serviceInstance, version));
         }
     }
 }
