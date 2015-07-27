@@ -8,11 +8,12 @@ import java.util.Map;
 /**
  * Created by huangsheng.hs on 2015/3/26.
  */
-public class RaceTestServiceImpl implements RaceTestService {
+public class RaceTestServiceImpl implements RaceTestService{
     @Override
     public Map<String, Object> getMap() {
-        Map<String, Object> newMap = new HashMap<>();
-        newMap.put("race", "rpc");
+        Map<String,Object> newMap = new HashMap<String,Object>();
+        newMap.put("race","rpc");
+        if(RpcContext.getProps() != null );
         newMap.putAll(RpcContext.getProps());
         return newMap;
     }
@@ -38,7 +39,7 @@ public class RaceTestServiceImpl implements RaceTestService {
     }
 
     @Override
-    public Integer throwException() throws RaceException {
+    public Integer throwException() throws RaceException{
         throw new RaceException("just a exception");
     }
 }
