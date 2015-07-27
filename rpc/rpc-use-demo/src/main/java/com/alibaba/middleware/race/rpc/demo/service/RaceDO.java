@@ -8,6 +8,7 @@ import java.util.List;
  * Created by huangsheng.hs on 2015/3/26.
  */
 public class RaceDO implements Serializable{
+    static private final long serialVersionUID = -4364536336161728421L;
     private int num;
     private String str;
     private List<String> list;

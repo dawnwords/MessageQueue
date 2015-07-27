@@ -6,6 +6,7 @@ import java.io.Serializable;
  * Created by huangsheng.hs on 2015/3/26.
  */
 public class RaceChildrenDO implements Serializable{
+    static private final long serialVersionUID = -4364586436171722421L;
     private int childNum;
     private Long longValue;
     private char[] chars;
