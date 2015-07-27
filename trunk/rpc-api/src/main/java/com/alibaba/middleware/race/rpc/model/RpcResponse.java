@@ -8,6 +8,21 @@ import java.io.Serializable;
 public class RpcResponse implements Serializable {
     private RuntimeException exception;
     private Serializable appResponse;
+    private long requestId;
+
+    public long requestId() {
+        return requestId;
+    }
+
+    public RpcResponse requestId(long requestId) {
+        this.requestId = requestId;
+        return this;
+    }
+
+    public RpcResponse exception(RuntimeException exception) {
+        this.exception = exception;
+        return this;
+    }
 
     public RuntimeException exception() {
         return exception;

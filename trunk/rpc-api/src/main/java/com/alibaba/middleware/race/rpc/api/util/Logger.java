@@ -17,6 +17,11 @@ public class Logger {
     }
 
     public static void error(String format, Object... args) {
-        System.err.printf(df.format(new Date()) + format + "\n", new Date(), args);
+        System.err.printf(df.format(new Date()) + format + "\n", args);
+    }
+
+    public static void error(Throwable cause) {
+        System.err.print(df.format(new Date()));
+        cause.printStackTrace(System.err);
     }
 }
