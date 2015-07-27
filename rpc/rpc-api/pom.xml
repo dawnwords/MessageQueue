@@ -12,7 +12,7 @@
     <artifactId>rpc-api</artifactId>
 
     <properties>
-        <output>${project.parent.basedir}/target/lib</output>
+        <output>${project.basedir}/target/lib</output>
     </properties>
 
     <build>
@@ -57,6 +57,16 @@
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
             <version>4.0.23.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>de.javakaffee</groupId>
+            <artifactId>kryo-serializers</artifactId>
+            <version>0.35</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>1.2.3</version>
         </dependency>
     </dependencies>
 
