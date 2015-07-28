@@ -33,8 +33,8 @@ public class RpcConsumerImpl extends RpcConsumer {
     private Bootstrap connector;
 
     public RpcConsumerImpl() {
-        this.serializeType = Parameter.SERIALIZE_TYPE; //TODO use kryo
-        this.asynMethodCallbackMap = new ConcurrentHashMap<>();
+        this.serializeType = Parameter.SERIALIZE_TYPE; //TODO use default
+        this.asynMethodCallbackMap = new ConcurrentHashMap<String, ResponseCallbackListener>();
         this.threadPool = Executors.newCachedThreadPool();
         this.connector = new Bootstrap()
                 .group(new NioEventLoopGroup(1, new DefaultThreadFactory("NettyClientSelector")))
@@ -125,10 +125,16 @@ public class RpcConsumerImpl extends RpcConsumer {
                     .addListener(new ChannelFutureListener() {
                         @Override
                         public void operationComplete(ChannelFuture future) throws Exception {
-                            future.channel().writeAndFlush(rpcRequest).addListener(new ChannelFutureListener() {
+                            final Channel channel = future.channel();
+                            channel.eventLoop().submit(new Runnable() {
                                 @Override
-                                public void operationComplete(ChannelFuture future) throws Exception {
-                                    future.channel().closeFuture();
+                                public void run() {
+                                    channel.writeAndFlush(rpcRequest).addListener(new ChannelFutureListener() {
+                                        @Override
+                                        public void operationComplete(ChannelFuture future) throws Exception {
+                                            future.channel().closeFuture();
+                                        }
+                                    });
                                 }
                             });
                         }
