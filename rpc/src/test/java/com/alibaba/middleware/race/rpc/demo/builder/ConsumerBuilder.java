@@ -32,7 +32,7 @@ public class ConsumerBuilder {
                 .interfaceClass(RaceTestService.class)
                 .version("1.0.0.api")
                 .clientTimeout(3000)
-                .hook(new RaceConsumerHook())
+//                .hook(new RaceConsumerHook())
                 .instance();
 
     }
