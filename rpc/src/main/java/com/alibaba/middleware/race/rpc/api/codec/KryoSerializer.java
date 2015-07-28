@@ -3,7 +3,6 @@ package com.alibaba.middleware.race.rpc.api.codec;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
 import de.javakaffee.kryoserializers.*;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -14,9 +13,6 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.reflect.InvocationHandler;
 import java.util.*;
 
@@ -29,7 +25,7 @@ public class KryoSerializer implements SerializerFactory {
         @Override
         protected Kryo initialValue() {
             Kryo kryo = new Kryo();
-            kryo.setInstantiatorStrategy(new Kryo.DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
+            kryo.setInstantiatorStrategy(new StdInstantiatorStrategy());
             kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
             kryo.register(Collections.EMPTY_LIST.getClass(), new CollectionsEmptyListSerializer());
             kryo.register(Collections.EMPTY_MAP.getClass(), new CollectionsEmptyMapSerializer());
