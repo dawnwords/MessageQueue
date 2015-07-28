@@ -3,10 +3,7 @@ package com.alibaba.middleware.race.rpc.demo.builder;
 import com.alibaba.middleware.race.rpc.api.RpcConsumer;
 import com.alibaba.middleware.race.rpc.async.ResponseFuture;
 import com.alibaba.middleware.race.rpc.context.RpcContext;
-import com.alibaba.middleware.race.rpc.demo.service.RaceDO;
-import com.alibaba.middleware.race.rpc.demo.service.RaceException;
-import com.alibaba.middleware.race.rpc.demo.service.RaceServiceListener;
-import com.alibaba.middleware.race.rpc.demo.service.RaceTestService;
+import com.alibaba.middleware.race.rpc.demo.service.*;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -34,7 +31,9 @@ public class ConsumerBuilder {
         apiService = (RaceTestService) consumer
                 .interfaceClass(RaceTestService.class)
                 .version("1.0.0.api")
-                .clientTimeout(3000).instance();
+                .clientTimeout(3000)
+                .hook(new RaceConsumerHook())
+                .instance();
 
     }
 

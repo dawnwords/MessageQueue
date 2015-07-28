@@ -10,6 +10,7 @@ import com.alibaba.middleware.race.rpc.async.ResponseFuture;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
@@ -39,6 +40,7 @@ public class RpcConsumerImpl extends RpcConsumer {
         this.connector = new Bootstrap()
                 .group(new NioEventLoopGroup(1, new DefaultThreadFactory("NettyClientSelector")))
                 .channel(NioSocketChannel.class)
+                .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.SO_KEEPALIVE, false)
                 .option(ChannelOption.SO_SNDBUF, Parameter.SND_BUF_SIZE)
@@ -212,6 +214,9 @@ public class RpcConsumerImpl extends RpcConsumer {
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
             Logger.error(cause);
+            if (listener != null) {
+                listener.onException(new Exception(cause));
+            }
         }
     }
 
