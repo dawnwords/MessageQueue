@@ -25,6 +25,8 @@ public class KryoSerializer implements SerializerFactory {
         @Override
         protected Kryo initialValue() {
             Kryo kryo = new Kryo();
+            kryo.setReferences(false);
+            kryo.setRegistrationRequired(false);
             kryo.setInstantiatorStrategy(new StdInstantiatorStrategy());
             kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
             kryo.register(Collections.EMPTY_LIST.getClass(), new CollectionsEmptyListSerializer());
