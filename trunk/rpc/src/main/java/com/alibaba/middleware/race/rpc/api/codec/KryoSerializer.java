@@ -6,11 +6,17 @@ import com.esotericsoftware.kryo.io.Output;
 import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
 import de.javakaffee.kryoserializers.*;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.InvocationHandler;
 import java.util.*;
 
@@ -40,31 +46,25 @@ public class KryoSerializer implements SerializerFactory {
         }
     };
 
+    private static final byte[] LENGTH_PLACEHOLDER = new byte[4];
+
     @Override
     public ByteToMessageDecoder deserializer() {
-        return new ByteToMessageDecoder() {
-            boolean finishHeader = false;
-            int bodyLength;
-
+        return new LengthFieldBasedFrameDecoder(10485760, 0, 4, 0, 4) {
             @Override
-            protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-                if (!finishHeader) {
-                    if (in.readableBytes() < 4) {
-                        return;
-                    }
-                    bodyLength = in.readInt();
-                    finishHeader = true;
-                } else {
-                    if (in.readableBytes() < bodyLength) {
-                        return;
-                    }
-                    byte[] body = new byte[bodyLength];
-                    in.readBytes(body);
-                    Input input = new Input(body);
-                    Object obj = kryo.get().readClassAndObject(input);
+            protected Object decode(final ChannelHandlerContext ctx, final ByteBuf in) throws Exception {
+                ByteBuf frame = (ByteBuf) super.decode(ctx, in);
+                if (frame == null) {
+                    return null;
+                }
+                try {
+                    ByteBufInputStream is = new ByteBufInputStream(frame);
+                    Input input = new Input(is);
+                    Object result = kryo.get().readClassAndObject(input);
                     input.close();
-                    out.add(obj);
-                    finishHeader = false;
+                    return result;
+                } finally {
+                    frame.release();
                 }
             }
         };
@@ -74,14 +74,15 @@ public class KryoSerializer implements SerializerFactory {
     public MessageToByteEncoder serializer() {
         return new MessageToByteEncoder() {
             @Override
-            protected void encode(ChannelHandlerContext ctx, Object obj, ByteBuf out) throws Exception {
-                ByteOutputStream bos = new ByteOutputStream();
-                Output output = new Output(bos);
-                kryo.get().writeClassAndObject(output, obj);
+            protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception {
+                int startIdx = out.writerIndex();
+                ByteBufOutputStream bout = new ByteBufOutputStream(out);
+                bout.write(LENGTH_PLACEHOLDER);
+                Output output = new Output(bout);
+                kryo.get().writeClassAndObject(output, msg);
                 output.close();
-                byte[] body = bos.getBytes();
-                out.writeInt(body.length);
-                out.writeBytes(body);
+                int endIdx = out.writerIndex();
+                out.setInt(startIdx, endIdx - startIdx - 4);
             }
         };
     }
