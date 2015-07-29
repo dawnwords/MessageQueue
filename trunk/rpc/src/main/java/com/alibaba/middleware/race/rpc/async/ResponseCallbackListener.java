@@ -9,4 +9,18 @@ public interface ResponseCallbackListener {
     void onTimeout();
 
     void onException(Exception e);
+
+    ResponseCallbackListener NULL = new ResponseCallbackListener() {
+        @Override
+        public void onResponse(Object response) {
+        }
+
+        @Override
+        public void onTimeout() {
+        }
+
+        @Override
+        public void onException(Exception e) {
+        }
+    };
 }

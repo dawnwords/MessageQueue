@@ -12,13 +12,12 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -65,7 +64,6 @@ public class RpcProviderImpl extends RpcProvider {
     }
 
     private SerializeType serializeType() {
-        //TODO ignore given serializeType
         return Parameter.SERIALIZE_TYPE;
     }
 
@@ -87,7 +85,7 @@ public class RpcProviderImpl extends RpcProvider {
                     .childHandler(new Initializer())
                     .option(ChannelOption.SO_BACKLOG, Parameter.BACKLOG_SIZE)
                     .option(ChannelOption.SO_REUSEADDR, true)
-                    .option(ChannelOption.SO_KEEPALIVE, false)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
                     .option(ChannelOption.SO_SNDBUF, Parameter.SND_BUF_SIZE)
                     .option(ChannelOption.SO_RCVBUF, Parameter.RCV_BUF_SIZE)
                     .childOption(ChannelOption.TCP_NODELAY, true)
@@ -115,7 +113,6 @@ public class RpcProviderImpl extends RpcProvider {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
-            pipeline.addLast(defaultEventExecutorGroup, "timeout", new ReadTimeoutHandler(timeout, TimeUnit.MILLISECONDS));
             pipeline.addLast(defaultEventExecutorGroup, "decoder", serializeType().deserializer());
             pipeline.addLast(defaultEventExecutorGroup, "encoder", serializeType().serializer());
             pipeline.addLast(defaultEventExecutorGroup, "handler", new ServerRpcHandler());
@@ -123,16 +120,17 @@ public class RpcProviderImpl extends RpcProvider {
     }
 
     @ChannelHandler.Sharable
-    public class ServerRpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
+    class ServerRpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
 
         @Override
-        protected void channelRead0(final ChannelHandlerContext ctx, final RpcRequest request) throws Exception {
+        protected void channelRead0(final ChannelHandlerContext ctx, final RpcRequest request) {
             Logger.info("[receive request]" + request);
+            final long start = System.currentTimeMillis();
             ctx.channel().eventLoop().submit(new Runnable() {
                 @Override
                 public void run() {
                     request.restoreContext();
-                    RpcResponse response = new RpcResponse();
+                    RpcResponse response = new RpcResponse().id(request.id());
 
                     if (version != null && !version.equals(request.version())) {
                         response.exception(new IllegalStateException(String.format("version not match: provided: %s, given :%s", version, request.version())));
@@ -146,24 +144,20 @@ public class RpcProviderImpl extends RpcProvider {
                             response.exception(e);
                         }
                     }
-                    writeResponse(ctx, response);
+                    boolean notTimeout = System.currentTimeMillis() - start < timeout;
+                    if (notTimeout) {
+                        Logger.info("[send response]" + response);
+                        ctx.writeAndFlush(response);
+                    }
                 }
             });
         }
 
         @Override
-        public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause) throws Exception {
-            ctx.channel().eventLoop().submit(new Runnable() {
-                @Override
-                public void run() {
-                    writeResponse(ctx, new RpcResponse().exception(cause));
-                }
-            });
-        }
-
-        private void writeResponse(ChannelHandlerContext ctx, RpcResponse response) {
-            Logger.info("[send response]" + response);
-            ctx.writeAndFlush(response);
+        public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause) {
+            if (cause instanceof IOException) {
+                Logger.error("[client disconnected]");
+            }
             ctx.close();
         }
     }

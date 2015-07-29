@@ -1,5 +1,6 @@
 package com.alibaba.middleware.race.rpc.api.codec;
 
+import com.alibaba.middleware.race.rpc.api.util.Logger;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
@@ -59,6 +60,7 @@ public class KryoSerializer implements SerializerFactory {
                     Input input = new Input(is);
                     Object result = kryo.get().readClassAndObject(input);
                     input.close();
+                    Logger.info("[decode]" + result);
                     return result;
                 } finally {
                     frame.release();
@@ -72,6 +74,7 @@ public class KryoSerializer implements SerializerFactory {
         return new MessageToByteEncoder() {
             @Override
             protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception {
+                Logger.info("[encode]" + msg);
                 int startIdx = out.writerIndex();
                 ByteBufOutputStream bout = new ByteBufOutputStream(out);
                 bout.write(LENGTH_PLACEHOLDER);
