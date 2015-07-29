@@ -14,7 +14,6 @@ public class RpcRequest implements Serializable {
     private final long id;
     private String methodName;
     private String version;
-    private Class[] parameterTypes;
     private Object[] arguments;
     private Map<String, Object> props;
 
@@ -37,11 +36,6 @@ public class RpcRequest implements Serializable {
         return this;
     }
 
-    public RpcRequest parameterTypes(Class[] parameterTypes) {
-        this.parameterTypes = parameterTypes;
-        return this;
-    }
-
     public RpcRequest version(String version) {
         this.version = version;
         return this;
@@ -55,8 +49,15 @@ public class RpcRequest implements Serializable {
         return version;
     }
 
-    public Class[] parameterTypes() {
-        return parameterTypes;
+    public Class<?>[] parameterTypes() {
+        if (arguments == null) return null;
+        Class<?>[] result = new Class<?>[arguments.length];
+        int i = 0;
+        for (Object each : arguments) {
+            result[i] = each.getClass();
+            i++;
+        }
+        return result;
     }
 
     public Object[] arguments() {
@@ -73,7 +74,6 @@ public class RpcRequest implements Serializable {
         return "RpcRequest{" +
                 "\n methodName='" + methodName + '\'' +
                 "\n version='" + version + '\'' +
-                "\n parameterTypes=" + Arrays.toString(parameterTypes) +
                 "\n arguments=" + Arrays.toString(arguments) +
                 "\n}";
     }

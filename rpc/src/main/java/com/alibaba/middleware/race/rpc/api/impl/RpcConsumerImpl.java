@@ -100,7 +100,6 @@ public class RpcConsumerImpl extends RpcConsumer {
         final RpcRequest rpcRequest = new RpcRequest()
                 .version(version)
                 .methodName(method.getName())
-                .parameterTypes(method.getParameterTypes())
                 .arguments(args);
 
         final ResponseCallbackListener listener = asynMethodCallbackMap.get(rpcRequest.methodName());

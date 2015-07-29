@@ -1,6 +1,5 @@
 package com.alibaba.middleware.race.rpc.api.codec;
 
-import com.alibaba.middleware.race.rpc.api.util.Logger;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
@@ -15,7 +14,9 @@ import io.netty.handler.codec.MessageToByteEncoder;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.lang.reflect.InvocationHandler;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.GregorianCalendar;
 
 /**
  * Created by Dawnwords on 2015/7/27.
@@ -60,7 +61,6 @@ public class KryoSerializer implements SerializerFactory {
                     Input input = new Input(is);
                     Object result = kryo.get().readClassAndObject(input);
                     input.close();
-                    Logger.info("[decode]" + result);
                     return result;
                 } finally {
                     frame.release();
@@ -74,7 +74,6 @@ public class KryoSerializer implements SerializerFactory {
         return new MessageToByteEncoder() {
             @Override
             protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception {
-                Logger.info("[encode]" + msg);
                 int startIdx = out.writerIndex();
                 ByteBufOutputStream bout = new ByteBufOutputStream(out);
                 bout.write(LENGTH_PLACEHOLDER);
