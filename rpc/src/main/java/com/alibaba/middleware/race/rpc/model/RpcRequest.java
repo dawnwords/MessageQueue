@@ -5,11 +5,13 @@ import com.alibaba.middleware.race.rpc.context.RpcContext;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Created by huangsheng.hs on 2015/5/7.
  */
 public class RpcRequest implements Serializable {
+    private final long id;
     private String methodName;
     private String version;
     private Class[] parameterTypes;
@@ -18,6 +20,11 @@ public class RpcRequest implements Serializable {
 
     public RpcRequest() {
         props = RpcContext.getProps();
+        this.id = System.nanoTime();
+    }
+
+    public long id() {
+        return id;
     }
 
     public RpcRequest methodName(String methodName) {

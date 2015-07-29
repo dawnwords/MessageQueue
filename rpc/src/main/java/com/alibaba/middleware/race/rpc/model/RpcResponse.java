@@ -6,8 +6,18 @@ import java.io.Serializable;
  * Created by huangsheng.hs on 2015/3/27.
  */
 public class RpcResponse implements Serializable {
+    private long id;
     private RuntimeException exception;
     private Object appResponse;
+
+    public long id() {
+        return id;
+    }
+
+    public RpcResponse id(long id) {
+        this.id = id;
+        return this;
+    }
 
     public RpcResponse exception(RuntimeException exception) {
         this.exception = exception;
