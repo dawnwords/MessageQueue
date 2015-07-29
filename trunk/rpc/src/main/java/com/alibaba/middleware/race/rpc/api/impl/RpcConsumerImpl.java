@@ -43,7 +43,7 @@ public class RpcConsumerImpl extends RpcConsumer {
         this.responseMap = new ConcurrentHashMap<Long, BlockingQueue<RpcResponse>>();
         this.threadPool = Executors.newCachedThreadPool();
         this.channel = new Bootstrap()
-                .group(new NioEventLoopGroup(1, new DefaultThreadFactory("NettyClientSelector")))
+                .group(new NioEventLoopGroup(Parameter.CLIENT_THREADS, new DefaultThreadFactory("NettyClientSelector")))
                 .channel(NioSocketChannel.class)
                 .handler(new Initializer())
                 .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
@@ -140,12 +140,40 @@ public class RpcConsumerImpl extends RpcConsumer {
         return response;
     }
 
-    private void sendRequest(RpcRequest rpcRequest) {
+    private void sendRequest(final RpcRequest rpcRequest) {
         if (hook != null) {
             hook.before(rpcRequest);
         }
         Logger.info("[send request]" + rpcRequest);
-        channel.writeAndFlush(rpcRequest);
+        channel.writeAndFlush(rpcRequest).addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture future) throws Exception {
+                if (future.isSuccess()) {
+                    return;
+                }
+                handleResponse(new RpcResponse().id(rpcRequest.id()).exception(future.cause()));
+            }
+        });
+    }
+
+
+    private void handleResponse(RpcResponse response) throws InterruptedException {
+        BlockingQueue<RpcResponse> responses = responseMap.get(response.id());
+        boolean callback = responses == null;
+        if (callback) {
+            ResponseCallbackListener listener = responseCallbackMap.get(response.id());
+            if (listener == null) {
+                Logger.error("[unexpected id]" + response.id());
+                return;
+            }
+            if (response.hasException()) {
+                listener.onException(response.exception());
+            } else {
+                listener.onResponse(response.appResponse());
+            }
+        } else {
+            responses.put(response);
+        }
     }
 
     @ChannelHandler.Sharable
@@ -166,22 +194,7 @@ public class RpcConsumerImpl extends RpcConsumer {
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, RpcResponse response) throws Exception {
             Logger.info("[receive response]" + response);
-            BlockingQueue<RpcResponse> responses = responseMap.get(response.id());
-            boolean callback = responses == null;
-            if (callback) {
-                ResponseCallbackListener listener = responseCallbackMap.get(response.id());
-                if (listener == null) {
-                    Logger.error("[unexpected id]" + response.id());
-                    return;
-                }
-                if (response.hasException()) {
-                    listener.onException(response.exception());
-                } else {
-                    listener.onResponse(response.appResponse());
-                }
-            } else {
-                responses.offer(response);
-            }
+            handleResponse(response);
         }
 
         @Override

@@ -19,11 +19,6 @@ public class RpcResponse implements Serializable {
         return this;
     }
 
-    public RpcResponse exception(RuntimeException exception) {
-        this.exception = exception;
-        return this;
-    }
-
     public RuntimeException exception() {
         return exception;
     }
