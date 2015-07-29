@@ -12,8 +12,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class RpcRequest implements Serializable {
     private final long id;
-    private String methodName;
-    private String version;
+    private byte[] methodName;
+    private byte[] version;
     private Object[] arguments;
     private Map<String, Object> props;
 
@@ -27,7 +27,7 @@ public class RpcRequest implements Serializable {
     }
 
     public RpcRequest methodName(String methodName) {
-        this.methodName = methodName;
+        this.methodName = methodName.getBytes();
         return this;
     }
 
@@ -37,16 +37,16 @@ public class RpcRequest implements Serializable {
     }
 
     public RpcRequest version(String version) {
-        this.version = version;
+        this.version = version.getBytes();
         return this;
     }
 
     public String methodName() {
-        return methodName;
+        return new String(methodName);
     }
 
     public String version() {
-        return version;
+        return new String(version);
     }
 
     public Class<?>[] parameterTypes() {
