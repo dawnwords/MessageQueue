@@ -18,6 +18,9 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -29,6 +32,7 @@ public class RpcProviderImpl extends RpcProvider {
     private int timeout;
     private SerializeType serializeType;
     private Object serviceInstance;
+    private Map<String/* methodName_argTypes */, Method> cachedMethods;
     private DefaultEventExecutorGroup defaultEventExecutorGroup =
             new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS,
                     new DefaultThreadFactory("NettyServerWorkerThread"));
@@ -36,6 +40,11 @@ public class RpcProviderImpl extends RpcProvider {
     @Override
     public RpcProvider serviceInterface(Class<?> serviceInterface) {
         this.serviceInterface = serviceInterface;
+        Map<String, Method> cachedMethods = new HashMap<String, Method>();
+        for (Method method : serviceInterface.getMethods()) {
+            cachedMethods.put(methodKey(method.getName(), method.getParameterTypes()), method);
+        }
+        this.cachedMethods = Collections.unmodifiableMap(cachedMethods);
         return this;
     }
 
@@ -136,7 +145,7 @@ public class RpcProviderImpl extends RpcProvider {
                         response.exception(new IllegalStateException(String.format("version not match: provided: %s, given :%s", version, request.version())));
                     } else {
                         try {
-                            Method method = serviceInterface.getDeclaredMethod(request.methodName(), request.parameterTypes());
+                            Method method = cachedMethods.get(methodKey(request.methodName(), request.parameterTypes()));
                             response.appResponse(method.invoke(serviceInstance, request.arguments()));
                         } catch (InvocationTargetException e) {
                             response.exception(e.getTargetException());
@@ -160,5 +169,15 @@ public class RpcProviderImpl extends RpcProvider {
             }
             ctx.close();
         }
+    }
+
+    private String methodKey(String name, Class[] paramTypes) {
+        String key = name;
+        if (paramTypes != null) {
+            for (Class c : paramTypes) {
+                key += c.getName();
+            }
+        }
+        return key;
     }
 }
