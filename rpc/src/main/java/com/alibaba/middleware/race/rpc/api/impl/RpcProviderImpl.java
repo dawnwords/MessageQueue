@@ -30,7 +30,7 @@ public class RpcProviderImpl extends RpcProvider {
     private SerializeType serializeType;
     private Object serviceInstance;
     private DefaultEventExecutorGroup defaultEventExecutorGroup =
-            new DefaultEventExecutorGroup(Parameter.SERVER_WORKER_THREADS,
+            new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS,
                     new DefaultThreadFactory("NettyServerWorkerThread"));
 
     @Override
@@ -76,9 +76,9 @@ public class RpcProviderImpl extends RpcProvider {
 
         @Override
         public void run() {
-            final EventLoopGroup bossGroup = new NioEventLoopGroup(1, new DefaultThreadFactory("NettyBossSelector"));
+            final EventLoopGroup bossGroup = new NioEventLoopGroup(Parameter.SERVER_BOSS_THREADS, new DefaultThreadFactory("NettyBossSelector"));
             final EventLoopGroup workerGroup = new NioEventLoopGroup(
-                    Parameter.SERVER_SELECTOR_THREADS, new DefaultThreadFactory("NettyServerSelector"));
+                    Parameter.SERVER_WORKER_THREADS, new DefaultThreadFactory("NettyServerSelector"));
             new ServerBootstrap()
                     .group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel.class)
@@ -147,7 +147,7 @@ public class RpcProviderImpl extends RpcProvider {
                     boolean notTimeout = System.currentTimeMillis() - start < timeout;
                     if (notTimeout) {
                         Logger.info("[send response]" + response);
-                        ctx.writeAndFlush(response);
+                        ctx.writeAndFlush(response).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
                     }
                 }
             });

@@ -18,27 +18,31 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Created by Dawnwords on 2015/7/21.
  */
 public class Client extends RpcConsumer {
     private SerializeType serializeType;
-    private Bootstrap connector;
+    private Channel channel;
     private CountDownLatch countDownLatch;
     private AtomicInteger callAmount;
 
     public Client(SerializeType serializeType) {
         this.serializeType = serializeType;
-        this.connector = new Bootstrap()
+        this.channel = new Bootstrap()
                 .group(new NioEventLoopGroup(1, new DefaultThreadFactory("NettyClientSelector")))
                 .channel(NioSocketChannel.class)
                 .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 .option(ChannelOption.TCP_NODELAY, true)
-                .option(ChannelOption.SO_KEEPALIVE, false)
+                .option(ChannelOption.SO_KEEPALIVE, true)
                 .option(ChannelOption.SO_SNDBUF, Parameter.SND_BUF_SIZE)
-                .option(ChannelOption.SO_RCVBUF, Parameter.RCV_BUF_SIZE);
+                .option(ChannelOption.SO_RCVBUF, Parameter.RCV_BUF_SIZE)
+                .handler(new Initializer())
+                .connect(System.getProperty("SIP", Parameter.SERVER_IP), Parameter.SERVER_PORT)
+                .syncUninterruptibly()
+                .channel();
+        Logger.error("[client start]");
     }
 
     public double getTPS() {
@@ -53,49 +57,22 @@ public class Client extends RpcConsumer {
             executor.execute(new Runnable() {
                 public void run() {
                     while (callAmount.get() < 100000) {
-                        send(new RaceDO());
+                        RaceDO raceDO = new RaceDO();
+                        Logger.info("[send]" + raceDO);
+                        channel.writeAndFlush(raceDO).syncUninterruptibly();
                     }
                     countDownLatch.countDown();
                 }
             });
         }
         try {
-            countDownLatch.await(30, TimeUnit.SECONDS);
+            countDownLatch.await(300, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {
         }
 
         timeMillis = System.currentTimeMillis() - timeMillis;
-
+        Logger.error("[time cost]%.3fs", timeMillis / 1000.0);
         return callAmount.get() / (timeMillis / 1000.0);
-    }
-
-    private void send(final RaceDO raceDO) {
-        final CountDownLatch latch = new CountDownLatch(1);
-        connector.handler(new Initializer())
-                .connect(System.getProperty("SIP", Parameter.SERVER_IP), Parameter.SERVER_PORT)
-                .addListener(new ChannelFutureListener() {
-                    @Override
-                    public void operationComplete(ChannelFuture future) throws Exception {
-                        final Channel channel = future.channel();
-                        Logger.info("send:%s", raceDO);
-                        channel.eventLoop().submit(new Runnable() {
-                            @Override
-                            public void run() {
-                                channel.writeAndFlush(raceDO).addListener(new ChannelFutureListener() {
-                                    @Override
-                                    public void operationComplete(ChannelFuture future) throws Exception {
-                                        future.channel().closeFuture();
-                                        latch.countDown();
-                                    }
-                                });
-                            }
-                        });
-                    }
-                });
-        try {
-            latch.await(30, TimeUnit.SECONDS);
-        } catch (InterruptedException ignored) {
-        }
     }
 
     @ChannelHandler.Sharable
@@ -115,7 +92,7 @@ public class Client extends RpcConsumer {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, RaceDO raceDO) throws Exception {
-            Logger.info("receive:%s", raceDO);
+            Logger.info("[receive]" + raceDO);
             if (new RaceDO().equals(raceDO)) {
                 callAmount.incrementAndGet();
             }
@@ -123,7 +100,8 @@ public class Client extends RpcConsumer {
     }
 
     public static void main(String[] args) {
-        System.out.printf("%s tps: %f\n", SerializeType.kryo, new Client(SerializeType.kryo).getTPS());
+        System.out.printf("%s tps: %f\n", TestSerializeType.serializeType(),
+                new Client(TestSerializeType.serializeType()).getTPS());
         System.exit(0);
     }
 }
