@@ -119,8 +119,8 @@ public class RpcConsumerImpl extends RpcConsumer {
 
         boolean callback = listener != ResponseCallbackListener.NULL;
         if (callback) {
-            sendRequest(rpcRequest);
             responseCallbackMap.put(rpcRequest.id(), new HookedCallbackListener(rpcRequest, listener));
+            sendRequest(rpcRequest);
         } else {
             ResponseFuture.setFuture(threadPool.submit(new Callable<Object>() {
                 @Override
