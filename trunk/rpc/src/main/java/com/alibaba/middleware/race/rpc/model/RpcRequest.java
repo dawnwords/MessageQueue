@@ -3,6 +3,7 @@ package com.alibaba.middleware.race.rpc.model;
 import com.alibaba.middleware.race.rpc.context.RpcContext;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -16,11 +17,11 @@ public class RpcRequest implements Serializable {
     private byte[] methodName;
     private byte[] version;
     private Object[] arguments;
-    private Map<String, Object> props;
+    private byte[][] propKeys;
+    private Object[] propVals;
 
     public RpcRequest init() {
         this.id = ID_GEN.getAndIncrement();
-        props = RpcContext.getProps();
         return this;
     }
 
@@ -66,8 +67,24 @@ public class RpcRequest implements Serializable {
         return arguments;
     }
 
+    public RpcRequest saveContext() {
+        Map<String, Object> props = RpcContext.getProps();
+        ArrayList<byte[]> propKeys = new ArrayList<byte[]>();
+        ArrayList<Object> propVals = new ArrayList<Object>();
+        for (String key : props.keySet()) {
+            propKeys.add(key.getBytes());
+            propVals.add(props.get(key));
+        }
+        int size = propKeys.size();
+        this.propKeys = propKeys.toArray(new byte[size][]);
+        this.propVals = propVals.toArray(new Object[size]);
+        return this;
+    }
+
     public RpcRequest restoreContext() {
-        RpcContext.setProp(props);
+        for (int i = 0; i < propKeys.length; i++) {
+            RpcContext.addProp(new String(propKeys[i]), propVals[i]);
+        }
         return this;
     }
 
