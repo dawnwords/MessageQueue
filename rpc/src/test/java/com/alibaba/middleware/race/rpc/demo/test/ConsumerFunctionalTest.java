@@ -5,11 +5,13 @@ import com.alibaba.middleware.race.rpc.demo.util.ExceptionUtil;
 
 import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * Created by huangsheng.hs on 2015/5/18.
  */
-public class ConsumerFunctionalTest extends ConsumerTest{
+public class ConsumerFunctionalTest extends ConsumerTest {
     public static void main(String[] args) {
         try {
             OutputStream outputStream = getFunctionalOutputStream();
