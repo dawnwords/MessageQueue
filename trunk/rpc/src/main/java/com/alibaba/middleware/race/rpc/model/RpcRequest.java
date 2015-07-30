@@ -65,15 +65,15 @@ public class RpcRequest implements Serializable {
     }
 
     public RpcRequest restoreContext() {
-        RpcContext.props = props;
+        RpcContext.setProp(props);
         return this;
     }
 
     @Override
     public String toString() {
         return "RpcRequest{" +
-                "\n methodName='" + methodName + '\'' +
-                "\n version='" + version + '\'' +
+                "\n methodName='" + methodName() + '\'' +
+                "\n version='" + version() + '\'' +
                 "\n arguments=" + Arrays.toString(arguments) +
                 "\n}";
     }
