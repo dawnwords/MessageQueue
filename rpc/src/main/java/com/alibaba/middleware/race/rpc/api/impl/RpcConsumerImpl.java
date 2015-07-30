@@ -102,7 +102,8 @@ public class RpcConsumerImpl extends RpcConsumer {
                 .init()
                 .version(version)
                 .methodName(method.getName())
-                .arguments(args);
+                .arguments(args)
+                .saveContext();
 
         final ResponseCallbackListener listener = asynMethodCallbackMap.get(rpcRequest.methodName());
         boolean isSynchronous = listener == null;
