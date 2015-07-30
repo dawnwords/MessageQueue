@@ -18,6 +18,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.*;
@@ -158,6 +159,7 @@ public class RpcConsumerImpl extends RpcConsumer {
 
 
     private void handleResponse(RpcResponse response) throws InterruptedException {
+        Logger.info("[receive response]" + response);
         BlockingQueue<RpcResponse> responses = responseMap.get(response.id());
         boolean callback = responses == null;
         if (callback) {
@@ -189,12 +191,19 @@ public class RpcConsumerImpl extends RpcConsumer {
     }
 
     @ChannelHandler.Sharable
-    class ClientRpcHandler extends SimpleChannelInboundHandler<RpcResponse> {
+    class ClientRpcHandler extends ChannelInboundHandlerAdapter {
 
         @Override
-        protected void channelRead0(ChannelHandlerContext ctx, RpcResponse response) throws Exception {
-            Logger.info("[receive response]" + response);
-            handleResponse(response);
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            if (msg instanceof List) {
+                for (RpcResponse response : (List<RpcResponse>) msg) {
+                    handleResponse(response);
+                }
+            } else if (msg instanceof RpcResponse) {
+                handleResponse((RpcResponse) msg);
+            } else {
+                Logger.error("[unknown response type]" + msg.getClass().getName());
+            }
         }
 
         @Override

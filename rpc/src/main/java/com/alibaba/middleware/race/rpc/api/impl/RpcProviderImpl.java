@@ -18,9 +18,11 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -129,17 +131,30 @@ public class RpcProviderImpl extends RpcProvider {
     }
 
     @ChannelHandler.Sharable
-    class ServerRpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
+    class ServerRpcHandler extends ChannelInboundHandlerAdapter {
 
         @Override
-        protected void channelRead0(final ChannelHandlerContext ctx, final RpcRequest request) {
+        public void channelRead(final ChannelHandlerContext ctx, Object msg) {
+            if (msg instanceof List) {
+                for (Object m : (List) msg) {
+                    handleRequest(ctx, m);
+                }
+            } else if (msg instanceof RpcRequest) {
+                handleRequest(ctx, msg);
+            } else {
+                Logger.error("[unknown request type]");
+            }
+        }
+
+        private void handleRequest(final ChannelHandlerContext ctx, Object msg) {
+            final RpcRequest request = (RpcRequest) msg;
             Logger.info("[receive request]" + request);
             final long start = System.currentTimeMillis();
             ctx.channel().eventLoop().submit(new Runnable() {
                 @Override
                 public void run() {
-                    request.restoreContext();
                     RpcResponse response = new RpcResponse().id(request.id());
+                    request.restoreContext();
 
                     if (version != null && !version.equals(request.version())) {
                         response.exception(new IllegalStateException(String.format("version not match: provided: %s, given :%s", version, request.version())));
