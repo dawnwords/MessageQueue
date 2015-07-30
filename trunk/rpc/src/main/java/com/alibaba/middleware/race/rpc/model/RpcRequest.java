@@ -12,15 +12,16 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class RpcRequest implements Serializable {
     private static final AtomicLong ID_GEN = new AtomicLong(0);
-    private final long id;
+    private long id;
     private byte[] methodName;
     private byte[] version;
     private Object[] arguments;
     private Map<String, Object> props;
 
-    public RpcRequest() {
-        props = RpcContext.getProps();
+    public RpcRequest init() {
         this.id = ID_GEN.getAndIncrement();
+        props = RpcContext.getProps();
+        return this;
     }
 
     public long id() {

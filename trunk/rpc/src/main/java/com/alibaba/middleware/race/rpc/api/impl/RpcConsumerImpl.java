@@ -99,6 +99,7 @@ public class RpcConsumerImpl extends RpcConsumer {
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         final RpcRequest rpcRequest = new RpcRequest()
+                .init()
                 .version(version)
                 .methodName(method.getName())
                 .arguments(args);
