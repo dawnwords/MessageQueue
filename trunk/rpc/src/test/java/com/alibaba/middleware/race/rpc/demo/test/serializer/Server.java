@@ -54,8 +54,8 @@ public class Server extends Thread {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
-            pipeline.addLast(defaultEventExecutorGroup, "decoder", serializeType.deserializer());
-            pipeline.addLast(defaultEventExecutorGroup, "encoder", serializeType.serializer());
+            pipeline.addLast(defaultEventExecutorGroup, "decoder", serializeType.serializer().decoder());
+            pipeline.addLast(defaultEventExecutorGroup, "encoder", serializeType.serializer().encoder());
             pipeline.addLast(defaultEventExecutorGroup, "handler", new ServerRpcHandler());
         }
     }
@@ -65,11 +65,11 @@ public class Server extends Thread {
 
         @Override
         protected void channelRead0(final ChannelHandlerContext ctx, final RaceDO raceDO) throws Exception {
-            Logger.info("[receive]" + raceDO);
+            Logger.info("[receive] %s", raceDO);
             ctx.channel().eventLoop().submit(new Runnable() {
                 @Override
                 public void run() {
-                    Logger.info("[send]" + raceDO);
+                    Logger.info("[send] %s", raceDO);
                     ctx.writeAndFlush(raceDO);
                 }
             });

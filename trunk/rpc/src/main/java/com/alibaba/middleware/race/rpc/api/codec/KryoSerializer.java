@@ -1,15 +1,19 @@
 package com.alibaba.middleware.race.rpc.api.codec;
 
+import com.alibaba.middleware.race.rpc.api.util.Logger;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
 import de.javakaffee.kryoserializers.*;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelOutboundHandler;
 import io.netty.handler.codec.*;
 import io.netty.util.internal.RecyclableArrayList;
 import io.netty.util.internal.StringUtil;
@@ -22,7 +26,7 @@ import java.util.*;
 /**
  * Created by Dawnwords on 2015/7/27.
  */
-public class KryoSerializer implements SerializerFactory {
+public class KryoSerializer implements Serializer {
 
     private final ThreadLocal<Kryo> kryo = new ThreadLocal<Kryo>() {
         @Override
@@ -49,7 +53,26 @@ public class KryoSerializer implements SerializerFactory {
     private static final byte[] LENGTH_PLACEHOLDER = new byte[4];
 
     @Override
-    public ChannelInboundHandlerAdapter deserializer() {
+    public Object decode(byte[] bytes) {
+        if (bytes == null) return null;
+        Input input = new Input(bytes);
+        Object result = kryo.get().readClassAndObject(input);
+        input.close();
+        return result;
+    }
+
+    @Override
+    public byte[] encode(Object o) {
+        if (o == null) return null;
+        ByteOutputStream bos = new ByteOutputStream();
+        Output output = new Output(bos);
+        kryo.get().writeClassAndObject(output, o);
+        output.close();
+        return Arrays.copyOfRange(bos.getBytes(), 0, bos.size());
+    }
+
+    @Override
+    public ChannelInboundHandler decoder() {
         return new ChannelInboundHandlerAdapter() {
 
             ByteBuf cumulation;
@@ -356,7 +379,7 @@ public class KryoSerializer implements SerializerFactory {
     }
 
     @Override
-    public MessageToByteEncoder serializer() {
+    public ChannelOutboundHandler encoder() {
         return new MessageToByteEncoder() {
             @Override
             protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception {

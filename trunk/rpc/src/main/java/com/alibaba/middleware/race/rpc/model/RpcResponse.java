@@ -24,8 +24,9 @@ public class RpcResponse implements Serializable {
     }
 
     public RpcResponse exception(Throwable throwable) {
-        this.exception = throwable instanceof RuntimeException ?
-                (RuntimeException) throwable : new RuntimeException(throwable);
+        this.exception = throwable == null ? null :
+                throwable instanceof RuntimeException ? (RuntimeException) throwable :
+                        new RuntimeException(throwable);
         return this;
     }
 
