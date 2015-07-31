@@ -3,9 +3,12 @@ package com.alibaba.middleware.race.rpc.api.impl;
 import com.alibaba.middleware.race.rpc.api.Parameter;
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
 import com.alibaba.middleware.race.rpc.api.codec.SerializeType;
+import com.alibaba.middleware.race.rpc.api.codec.Serializer;
 import com.alibaba.middleware.race.rpc.api.util.Logger;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
+import com.alibaba.middleware.race.rpc.model.RpcRequestWrapper;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
+import com.alibaba.middleware.race.rpc.model.RpcResponseWrapper;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
@@ -18,11 +21,10 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Created by Dawnwords on 2015/7/21.
@@ -124,8 +126,9 @@ public class RpcProviderImpl extends RpcProvider {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
-            pipeline.addLast(defaultEventExecutorGroup, "decoder", serializeType().deserializer());
-            pipeline.addLast(defaultEventExecutorGroup, "encoder", serializeType().serializer());
+            Serializer serializer = serializeType().serializer();
+            pipeline.addLast(defaultEventExecutorGroup, "decoder", serializer.decoder());
+            pipeline.addLast(defaultEventExecutorGroup, "encoder", serializer.encoder());
             pipeline.addLast(defaultEventExecutorGroup, "handler", new ServerRpcHandler());
         }
     }
@@ -136,53 +139,65 @@ public class RpcProviderImpl extends RpcProvider {
         @Override
         public void channelRead(final ChannelHandlerContext ctx, Object msg) {
             if (msg instanceof List) {
-                for (Object m : (List) msg) {
-                    handleRequest(ctx, m);
+                for (Object o : (List) msg) {
+                    ctx.channel().eventLoop().submit(new RequestWorker(ctx, (RpcRequestWrapper) o));
                 }
-            } else if (msg instanceof RpcRequest) {
-                handleRequest(ctx, msg);
+            } else if (msg instanceof RpcRequestWrapper) {
+                ctx.channel().eventLoop().submit(new RequestWorker(ctx, (RpcRequestWrapper) msg));
             } else {
                 Logger.error("[unknown request type]");
             }
-        }
-
-        private void handleRequest(final ChannelHandlerContext ctx, Object msg) {
-            final RpcRequest request = (RpcRequest) msg;
-            Logger.info("[receive request]" + request);
-            final long start = System.currentTimeMillis();
-            ctx.channel().eventLoop().submit(new Runnable() {
-                @Override
-                public void run() {
-                    RpcResponse response = new RpcResponse().id(request.id());
-                    request.restoreContext();
-
-                    if (version != null && !version.equals(request.version())) {
-                        response.exception(new IllegalStateException(String.format("version not match: provided: %s, given :%s", version, request.version())));
-                    } else {
-                        try {
-                            Method method = cachedMethods.get(methodKey(request.methodName(), request.parameterTypes()));
-                            response.appResponse(method.invoke(serviceInstance, request.arguments()));
-                        } catch (InvocationTargetException e) {
-                            response.exception(e.getTargetException());
-                        } catch (Exception e) {
-                            response.exception(e);
-                        }
-                    }
-                    boolean notTimeout = System.currentTimeMillis() - start < timeout;
-                    if (notTimeout) {
-                        Logger.info("[send response]" + response);
-                        ctx.writeAndFlush(response).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
-                    }
-                }
-            });
         }
 
         @Override
         public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause) {
             if (cause instanceof IOException) {
                 Logger.error("[client disconnected]");
+            } else {
+                Logger.error(cause);
             }
             ctx.close();
+        }
+    }
+
+    class RequestWorker implements Runnable {
+
+        private ChannelHandlerContext ctx;
+        private RpcRequestWrapper requestWrapper;
+        private long start;
+
+        public RequestWorker(ChannelHandlerContext ctx, RpcRequestWrapper requestWrapper) {
+            this.ctx = ctx;
+            this.requestWrapper = requestWrapper;
+            this.start = System.currentTimeMillis();
+        }
+
+        @Override
+        public void run() {
+            RpcRequest request = requestWrapper.deserialize(serializeType().serializer());
+            Logger.info("[receive request] %s", request);
+            RpcResponse response = new RpcResponse().id(request.id());
+            request.restoreContext();
+
+            if (version != null && !version.equals(request.version())) {
+                response.exception(new IllegalStateException(String.format("version not match: provided: %s, given :%s", version, request.version())));
+            } else {
+                try {
+                    Method method = cachedMethods.get(methodKey(request.methodName(), request.parameterTypes()));
+                    response.appResponse(method.invoke(serviceInstance, request.arguments()));
+                } catch (InvocationTargetException e) {
+                    response.exception(e.getTargetException());
+                } catch (Exception e) {
+                    response.exception(e);
+                }
+            }
+            boolean notTimeout = System.currentTimeMillis() - start < timeout;
+            if (notTimeout) {
+                Logger.info("[send response] %s", response);
+                RpcResponseWrapper wrapper = new RpcResponseWrapper();
+                ctx.writeAndFlush(wrapper.serialize(response, serializeType().serializer()))
+                        .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+            }
         }
     }
 

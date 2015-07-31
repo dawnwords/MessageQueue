@@ -3,7 +3,6 @@ package com.alibaba.middleware.race.rpc.model;
 import com.alibaba.middleware.race.rpc.context.RpcContext;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -14,11 +13,10 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RpcRequest implements Serializable {
     private static final AtomicLong ID_GEN = new AtomicLong(0);
     private long id;
-    private byte[] methodName;
-    private byte[] version;
+    private String methodName;
+    private String version;
     private Object[] arguments;
-    private byte[][] propKeys;
-    private Object[] propVals;
+    private Map<String, Object> context;
 
     public RpcRequest init() {
         this.id = ID_GEN.getAndIncrement();
@@ -29,8 +27,13 @@ public class RpcRequest implements Serializable {
         return id;
     }
 
+    RpcRequest id(long id) {
+        this.id = id;
+        return this;
+    }
+
     public RpcRequest methodName(String methodName) {
-        this.methodName = methodName.getBytes();
+        this.methodName = methodName;
         return this;
     }
 
@@ -40,16 +43,16 @@ public class RpcRequest implements Serializable {
     }
 
     public RpcRequest version(String version) {
-        this.version = version.getBytes();
+        this.version = version;
         return this;
     }
 
     public String methodName() {
-        return new String(methodName);
+        return methodName;
     }
 
     public String version() {
-        return new String(version);
+        return version;
     }
 
     public Class<?>[] parameterTypes() {
@@ -67,24 +70,22 @@ public class RpcRequest implements Serializable {
         return arguments;
     }
 
+    Map<String, Object> context() {
+        return context;
+    }
+
+    RpcRequest context(Map<String, Object> contexts) {
+        this.context = contexts;
+        return this;
+    }
+
     public RpcRequest saveContext() {
-        Map<String, Object> props = RpcContext.getProps();
-        ArrayList<byte[]> propKeys = new ArrayList<byte[]>();
-        ArrayList<Object> propVals = new ArrayList<Object>();
-        for (String key : props.keySet()) {
-            propKeys.add(key.getBytes());
-            propVals.add(props.get(key));
-        }
-        int size = propKeys.size();
-        this.propKeys = propKeys.toArray(new byte[size][]);
-        this.propVals = propVals.toArray(new Object[size]);
+        this.context = RpcContext.getProps();
         return this;
     }
 
     public RpcRequest restoreContext() {
-        for (int i = 0; i < propKeys.length; i++) {
-            RpcContext.addProp(new String(propKeys[i]), propVals[i]);
-        }
+        RpcContext.setProp(context);
         return this;
     }
 

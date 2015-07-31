@@ -4,11 +4,14 @@ import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
 import com.alibaba.middleware.race.rpc.api.Parameter;
 import com.alibaba.middleware.race.rpc.api.RpcConsumer;
 import com.alibaba.middleware.race.rpc.api.codec.SerializeType;
+import com.alibaba.middleware.race.rpc.api.codec.Serializer;
 import com.alibaba.middleware.race.rpc.api.util.Logger;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
 import com.alibaba.middleware.race.rpc.async.ResponseFuture;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
+import com.alibaba.middleware.race.rpc.model.RpcRequestWrapper;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
+import com.alibaba.middleware.race.rpc.model.RpcResponseWrapper;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
@@ -147,27 +150,29 @@ public class RpcConsumerImpl extends RpcConsumer {
         if (hook != null) {
             hook.before(rpcRequest);
         }
-        Logger.info("[send request]" + rpcRequest);
-        channel.writeAndFlush(rpcRequest).addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-                if (future.isSuccess()) {
-                    return;
-                }
-                handleResponse(new RpcResponse().id(rpcRequest.id()).exception(future.cause()));
-            }
-        });
+        Logger.info("[send request] %s", rpcRequest);
+        RpcRequestWrapper wrapper = new RpcRequestWrapper();
+        channel.writeAndFlush(wrapper.serialize(rpcRequest, serializeType.serializer()))
+                .addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(ChannelFuture future) throws Exception {
+                        if (future.isSuccess()) {
+                            return;
+                        }
+                        handleResponse(new RpcResponse().id(rpcRequest.id()).exception(future.cause()));
+                    }
+                });
     }
 
 
     private void handleResponse(RpcResponse response) throws InterruptedException {
-        Logger.info("[receive response]" + response);
+        Logger.info("[receive response] %s", response);
         BlockingQueue<RpcResponse> responses = responseMap.get(response.id());
         boolean callback = responses == null;
         if (callback) {
             ResponseCallbackListener listener = responseCallbackMap.get(response.id());
             if (listener == null) {
-                Logger.error("[unexpected id]" + response.id());
+                Logger.error("[unexpected id] %d", response.id());
                 return;
             }
             if (response.hasException()) {
@@ -186,8 +191,9 @@ public class RpcConsumerImpl extends RpcConsumer {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
-            pipeline.addLast("decoder", serializeType.deserializer());
-            pipeline.addLast("encoder", serializeType.serializer());
+            Serializer serializer = serializeType.serializer();
+            pipeline.addLast("decoder", serializer.decoder());
+            pipeline.addLast("encoder", serializer.encoder());
             pipeline.addLast("handler", new ClientRpcHandler());
         }
     }
@@ -197,12 +203,15 @@ public class RpcConsumerImpl extends RpcConsumer {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            Serializer serializer = serializeType.serializer();
             if (msg instanceof List) {
-                for (RpcResponse response : (List<RpcResponse>) msg) {
-                    handleResponse(response);
+                for (Object o : (List) msg) {
+                    RpcResponseWrapper wrapper = (RpcResponseWrapper) o;
+                    handleResponse(wrapper.deserialize(serializer));
                 }
-            } else if (msg instanceof RpcResponse) {
-                handleResponse((RpcResponse) msg);
+            } else if (msg instanceof RpcResponseWrapper) {
+                RpcResponseWrapper wrapper = (RpcResponseWrapper) msg;
+                handleResponse(wrapper.deserialize(serializer));
             } else {
                 Logger.error("[unknown response type]" + msg.getClass().getName());
             }

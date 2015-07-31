@@ -58,7 +58,7 @@ public class Client extends RpcConsumer {
                 public void run() {
                     while (callAmount.get() < 100000) {
                         RaceDO raceDO = new RaceDO();
-                        Logger.info("[send]" + raceDO);
+                        Logger.info("[send] %s", raceDO);
                         channel.writeAndFlush(raceDO).syncUninterruptibly();
                     }
                     countDownLatch.countDown();
@@ -81,8 +81,8 @@ public class Client extends RpcConsumer {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
-            pipeline.addLast("decoder", serializeType.deserializer());
-            pipeline.addLast("encoder", serializeType.serializer());
+            pipeline.addLast("decoder", serializeType.serializer().decoder());
+            pipeline.addLast("encoder", serializeType.serializer().encoder());
             pipeline.addLast("handler", new ClientRpcHandler());
         }
     }
@@ -92,7 +92,7 @@ public class Client extends RpcConsumer {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, RaceDO raceDO) throws Exception {
-            Logger.info("[receive]" + raceDO);
+            Logger.info("[receive] %s", raceDO);
             if (new RaceDO().equals(raceDO)) {
                 callAmount.incrementAndGet();
             }
