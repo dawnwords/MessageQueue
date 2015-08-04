@@ -1,10 +1,8 @@
 package com.alibaba.middleware.race.rpc.api.codec;
 
-import com.alibaba.middleware.race.rpc.api.util.Logger;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
 import de.javakaffee.kryoserializers.*;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -14,7 +12,10 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOutboundHandler;
-import io.netty.handler.codec.*;
+import io.netty.handler.codec.CorruptedFrameException;
+import io.netty.handler.codec.DecoderException;
+import io.netty.handler.codec.MessageToByteEncoder;
+import io.netty.handler.codec.TooLongFrameException;
 import io.netty.util.internal.RecyclableArrayList;
 import io.netty.util.internal.StringUtil;
 import org.objenesis.strategy.StdInstantiatorStrategy;
@@ -64,11 +65,10 @@ public class KryoSerializer implements Serializer {
     @Override
     public byte[] encode(Object o) {
         if (o == null) return null;
-        ByteOutputStream bos = new ByteOutputStream();
-        Output output = new Output(bos);
+        Output output = new Output(4096);
         kryo.get().writeClassAndObject(output, o);
         output.close();
-        return Arrays.copyOfRange(bos.getBytes(), 0, bos.size());
+        return output.toBytes();
     }
 
     @Override
