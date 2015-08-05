@@ -20,6 +20,7 @@ import io.netty.util.internal.RecyclableArrayList;
 import io.netty.util.internal.StringUtil;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
+import java.io.ByteArrayOutputStream;
 import java.lang.reflect.InvocationHandler;
 import java.nio.ByteOrder;
 import java.util.*;
@@ -65,10 +66,11 @@ public class KryoSerializer implements Serializer {
     @Override
     public byte[] encode(Object o) {
         if (o == null) return null;
-        Output output = new Output(4096);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        Output output = new Output(bos);
         kryo.get().writeClassAndObject(output, o);
         output.close();
-        return output.toBytes();
+        return bos.toByteArray();
     }
 
     @Override
