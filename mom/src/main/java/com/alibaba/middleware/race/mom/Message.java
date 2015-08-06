@@ -5,12 +5,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Message implements Serializable {
-    private static final long serialVersionUID = 5295808332504208830L;
     private String topic;
     private byte[] body;
     private String msgId;   //全局唯一的消息id，不同消息不能重复
     private long bornTime;
-
     private Map<String, String> properties = new HashMap<String, String>();
 
     public void setTopic(String topic) {
@@ -49,6 +47,10 @@ public class Message implements Serializable {
      */
     public void setProperty(String key, String value) {
         properties.put(key, value);
+    }
+
+    public Map<String, String> getProperties() {
+        return properties;
     }
 
     /**
