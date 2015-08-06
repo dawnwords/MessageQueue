@@ -3,9 +3,10 @@ package com.alibaba.middleware.race.mom;
 
 public class DefaultConsumer implements Consumer {
 
-    public DefaultConsumer() {
-        String brokerIp = System.getProperty("SIP");
+    private final String brokerIp;
 
+    public DefaultConsumer() {
+        brokerIp = System.getProperty("SIP");
     }
 
     @Override
