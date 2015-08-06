@@ -1,4 +1,4 @@
-package com.alibaba.middleware.race.mom.broker.codec;
+package com.alibaba.middleware.race.mom.codec;
 
 /**
  * Created by Dawnwords on 2015/7/22.

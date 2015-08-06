@@ -1,4 +1,4 @@
-package com.alibaba.middleware.race.mom.broker.bean;
+package com.alibaba.middleware.race.mom.bean;
 
 import java.io.Serializable;
 

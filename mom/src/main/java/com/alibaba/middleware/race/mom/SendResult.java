@@ -1,6 +1,10 @@
 package com.alibaba.middleware.race.mom;
 
 public class SendResult {
+    private SendStatus status;
+    private String msgId;
+    private String info;
+
     public String getInfo() {
         return info;
     }
@@ -24,10 +28,6 @@ public class SendResult {
     public void setMsgId(String msgId) {
         this.msgId = msgId;
     }
-
-    private String info;
-    private SendStatus status;
-    private String msgId;
 
     @Override
     public String toString() {

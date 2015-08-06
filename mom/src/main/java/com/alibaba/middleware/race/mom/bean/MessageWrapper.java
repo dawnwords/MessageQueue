@@ -1,7 +1,7 @@
-package com.alibaba.middleware.race.mom.broker.bean;
+package com.alibaba.middleware.race.mom.bean;
 
 import com.alibaba.middleware.race.mom.Message;
-import com.alibaba.middleware.race.mom.broker.codec.Serializer;
+import com.alibaba.middleware.race.mom.codec.Serializer;
 
 import java.util.Map;
 

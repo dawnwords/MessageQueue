@@ -1,4 +1,4 @@
-package com.alibaba.middleware.race.mom.broker.codec;
+package com.alibaba.middleware.race.mom.codec;
 
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelOutboundHandler;

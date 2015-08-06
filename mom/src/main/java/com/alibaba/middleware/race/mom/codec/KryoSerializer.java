@@ -1,4 +1,4 @@
-package com.alibaba.middleware.race.mom.broker.codec;
+package com.alibaba.middleware.race.mom.codec;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;

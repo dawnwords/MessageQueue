@@ -1,6 +1,6 @@
-package com.alibaba.middleware.race.mom.broker.bean;
+package com.alibaba.middleware.race.mom.bean;
 
-import com.alibaba.middleware.race.mom.broker.codec.Serializer;
+import com.alibaba.middleware.race.mom.codec.Serializer;
 
 /**
  * Created by Dawnwords on 2015/8/6.
