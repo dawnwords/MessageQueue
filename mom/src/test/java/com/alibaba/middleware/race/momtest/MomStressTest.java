@@ -15,6 +15,7 @@ import com.alibaba.middleware.race.mom.DefaultProducer;
 import com.alibaba.middleware.race.mom.Message;
 import com.alibaba.middleware.race.mom.MessageListener;
 import com.alibaba.middleware.race.mom.Producer;
+import com.alibaba.middleware.race.mom.SendCallback;
 import com.alibaba.middleware.race.mom.SendResult;
 import com.alibaba.middleware.race.mom.SendStatus;
 
@@ -33,7 +34,7 @@ public class MomStressTest {
 	private static int c=Integer.valueOf(System.getProperty("C","30"));
 	private static ExecutorService executorService=Executors.newFixedThreadPool(c);
 
-	private static com.alibaba.middleware.race.momtest.TestResult testResult=new TestResult();
+	private static TestResult testResult=new TestResult();
 	public static void main(String[] args) {
 		testBasic();
 		if (!testResult.isSuccess()) {
@@ -46,14 +47,14 @@ public class MomStressTest {
 		Runtime.getRuntime().exit(0);
 	}
 	private static void testBasic() {
-		final int code=random.nextInt(100);
+		final int code=random.nextInt(100000);
 		final ConsumeResult consumeResult=new ConsumeResult();
 		consumeResult.setStatus(ConsumeStatus.SUCCESS);
 		final String topic=TOPIC+code;
 		try {
 			String ip=System.getProperty("SIP");
 			Consumer consumer=new DefaultConsumer();
-			consumer.setGroupId(CID);
+			consumer.setGroupId(CID+code);
 			consumer.subscribe(topic, "", new MessageListener() {
 				
 				@Override
@@ -74,7 +75,7 @@ public class MomStressTest {
 			});
 			consumer.start();
 			final Producer producer=new DefaultProducer();
-			producer.setGroupId(PID);
+			producer.setGroupId(PID+code);
 			producer.setTopic(topic);
 			producer.start();
 			long start=System.currentTimeMillis();
@@ -129,7 +130,7 @@ public class MomStressTest {
 		}
 	}
 	private static void testFilter() {
-		int code=random.nextInt(100);
+		int code=random.nextInt(100000);
 		final ConsumeResult consumeResult=new ConsumeResult();
 		consumeResult.setStatus(ConsumeStatus.SUCCESS);
 		final String topic=TOPIC+code;
@@ -138,7 +139,7 @@ public class MomStressTest {
 		try {
 			String ip=System.getProperty("SIP");
 			Consumer consumer=new DefaultConsumer();
-			consumer.setGroupId(CID);
+			consumer.setGroupId(CID+code);
 			consumer.subscribe(topic, k+"="+v, new MessageListener() {
 				
 				@Override
@@ -160,7 +161,7 @@ public class MomStressTest {
 			});
 			consumer.start();
 			Producer producer=new DefaultProducer();
-			producer.setGroupId(PID);
+			producer.setGroupId(PID+code);
 			producer.setTopic(topic);
 			producer.start();
 			Message msg=new Message();

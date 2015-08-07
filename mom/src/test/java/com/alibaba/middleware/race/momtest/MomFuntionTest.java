@@ -27,7 +27,7 @@ public class MomFuntionTest {
 	private static Queue<String> sendMsg=new LinkedBlockingQueue<String>();
 	private static Queue<String> recvMsg=new LinkedBlockingQueue<String>();
 
-	private static com.alibaba.middleware.race.momtest.TestResult testResult=new TestResult();
+	private static TestResult testResult=new TestResult();  
 	public static void main(String[] args) {
 		testBasic();
 		if (!testResult.isSuccess()) {
@@ -44,14 +44,14 @@ public class MomFuntionTest {
 
 	}
 	private static void testBasic() {
-		int code=random.nextInt(100);
+		int code=random.nextInt(100000);
 		final ConsumeResult consumeResult=new ConsumeResult();
 		consumeResult.setStatus(ConsumeStatus.SUCCESS);
 		final String topic=TOPIC+code;
 		try {
 			String ip=System.getProperty("SIP");
 			Consumer consumer=new DefaultConsumer();
-			consumer.setGroupId(CID);
+			consumer.setGroupId(CID+code);
 			consumer.subscribe(topic, "", new MessageListener() {
 				
 				@Override
@@ -70,7 +70,7 @@ public class MomFuntionTest {
 			});
 			consumer.start();
 			Producer producer=new DefaultProducer();
-			producer.setGroupId(PID);
+			producer.setGroupId(PID+code);
 			producer.setTopic(topic);
 			producer.start();
 			Message msg=new Message();
@@ -97,7 +97,7 @@ public class MomFuntionTest {
 		}
 	}
 	private static void testFilter() {
-		int code=random.nextInt(100);
+		int code=random.nextInt(100000);
 		final ConsumeResult consumeResult=new ConsumeResult();
 		consumeResult.setStatus(ConsumeStatus.SUCCESS);
 		final String topic=TOPIC+code;
@@ -106,7 +106,7 @@ public class MomFuntionTest {
 		try {
 			String ip=System.getProperty("SIP");
 			Consumer consumer=new DefaultConsumer();
-			consumer.setGroupId(CID);
+			consumer.setGroupId(CID+code);
 			consumer.subscribe(topic, k+"="+v, new MessageListener() {
 				
 				@Override
@@ -129,7 +129,7 @@ public class MomFuntionTest {
 			});
 			consumer.start();
 			Producer producer=new DefaultProducer();
-			producer.setGroupId(PID);
+			producer.setGroupId(PID+code);
 			producer.setTopic(topic);
 			producer.start();
 			Message msg=new Message();
