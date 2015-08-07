@@ -2,6 +2,7 @@ package com.alibaba.middleware.race.mom.bean;
 
 import com.alibaba.middleware.race.mom.Message;
 import com.alibaba.middleware.race.mom.codec.Serializer;
+import io.netty.buffer.ByteBuf;
 
 import java.util.Map;
 
@@ -44,6 +45,29 @@ public class MessageWrapper implements SerializeWrapper<Message> {
             propVals[i] = serializer.encode(properties.get(key));
             i++;
         }
+        return this;
+    }
+
+    @Override
+    public void encode(ByteBuf out) {
+        out.writeByte(MESSAGE);
+        Encoder.encode(out, topic);
+        Encoder.encode(out, body);
+        out.writeBytes(msgId);
+        out.writeLong(bornTime);
+        Encoder.encode(out, propKeys);
+        Encoder.encode(out, propVals);
+    }
+
+    @Override
+    public SerializeWrapper<Message> decode(ByteBuf in) {
+        this.topic = Decoder.decode(in);
+        this.body = Decoder.decode(in);
+        this.msgId = new byte[16];
+        in.readBytes(msgId);
+        this.bornTime = in.readLong();
+        this.propKeys = Decoder.decodeArray(in);
+        this.propVals = Decoder.decodeArray(in);
         return this;
     }
 }

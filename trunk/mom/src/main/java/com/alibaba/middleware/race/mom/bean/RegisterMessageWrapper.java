@@ -1,6 +1,7 @@
 package com.alibaba.middleware.race.mom.bean;
 
 import com.alibaba.middleware.race.mom.codec.Serializer;
+import io.netty.buffer.ByteBuf;
 
 /**
  * Created by Dawnwords on 2015/8/6.
@@ -23,6 +24,22 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
         this.type = (byte) msg.type().ordinal();
         this.groupId = serializer.encode(msg.groupId());
         this.filter = serializer.encode(msg.filter());
+        return this;
+    }
+
+    @Override
+    public void encode(ByteBuf out) {
+        out.writeByte(REGISTER);
+        out.writeByte(type);
+        Encoder.encode(out, groupId);
+        Encoder.encode(out, filter);
+    }
+
+    @Override
+    public SerializeWrapper<RegisterMessage> decode(ByteBuf in) {
+        this.type = in.readByte();
+        this.groupId = Decoder.decode(in);
+        this.filter = Decoder.decode(in);
         return this;
     }
 }
