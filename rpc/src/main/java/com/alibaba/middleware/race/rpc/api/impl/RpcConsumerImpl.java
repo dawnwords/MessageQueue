@@ -209,9 +209,6 @@ public class RpcConsumerImpl extends RpcConsumer {
                     RpcResponseWrapper wrapper = (RpcResponseWrapper) o;
                     handleResponse(wrapper.deserialize(serializer));
                 }
-            } else if (msg instanceof RpcResponseWrapper) {
-                RpcResponseWrapper wrapper = (RpcResponseWrapper) msg;
-                handleResponse(wrapper.deserialize(serializer));
             } else {
                 Logger.error("[unknown response type]" + msg.getClass().getName());
             }

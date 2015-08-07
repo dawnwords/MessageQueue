@@ -85,6 +85,16 @@ public class RpcProviderImpl extends RpcProvider {
         new ProviderServer().start();
     }
 
+    private String methodKey(String name, Class[] paramTypes) {
+        String key = name;
+        if (paramTypes != null) {
+            for (Class c : paramTypes) {
+                key += c.getName();
+            }
+        }
+        return key;
+    }
+
     private class ProviderServer extends Thread {
 
         @Override
@@ -142,8 +152,6 @@ public class RpcProviderImpl extends RpcProvider {
                 for (Object o : (List) msg) {
                     ctx.channel().eventLoop().submit(new RequestWorker(ctx, (RpcRequestWrapper) o));
                 }
-            } else if (msg instanceof RpcRequestWrapper) {
-                ctx.channel().eventLoop().submit(new RequestWorker(ctx, (RpcRequestWrapper) msg));
             } else {
                 Logger.error("[unknown request type]");
             }
@@ -199,15 +207,5 @@ public class RpcProviderImpl extends RpcProvider {
                         .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
             }
         }
-    }
-
-    private String methodKey(String name, Class[] paramTypes) {
-        String key = name;
-        if (paramTypes != null) {
-            for (Class c : paramTypes) {
-                key += c.getName();
-            }
-        }
-        return key;
     }
 }
