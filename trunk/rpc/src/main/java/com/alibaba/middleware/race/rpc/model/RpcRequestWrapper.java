@@ -1,9 +1,9 @@
 package com.alibaba.middleware.race.rpc.model;
 
 import com.alibaba.middleware.race.rpc.api.codec.Serializer;
+import io.netty.buffer.ByteBuf;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -70,6 +70,28 @@ public class RpcRequestWrapper implements SerializeWrapper<RpcRequest> {
             this.propKeys = propKeys.toArray(new byte[contextSize][]);
             this.propVals = propVals.toArray(new byte[contextSize][]);
         }
+        return this;
+    }
+
+    @Override
+    public void encode(ByteBuf out) {
+        out.writeByte(0);   //Request Flag
+        out.writeLong(id);
+        Encoder.encode(out, methodName);
+        Encoder.encode(out, version);
+        Encoder.encode(out, arguments);
+        Encoder.encode(out, propKeys);
+        Encoder.encode(out, propVals);
+    }
+
+    @Override
+    public Object decode(ByteBuf in) {
+        this.id = in.readLong();
+        this.methodName = Decoder.decode(in);
+        this.version = Decoder.decode(in);
+        this.arguments = Decoder.decodeArray(in);
+        this.propKeys = Decoder.decodeArray(in);
+        this.propVals = Decoder.decodeArray(in);
         return this;
     }
 

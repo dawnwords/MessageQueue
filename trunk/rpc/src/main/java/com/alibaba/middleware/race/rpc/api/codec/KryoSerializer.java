@@ -1,12 +1,13 @@
 package com.alibaba.middleware.race.rpc.api.codec;
 
+import com.alibaba.middleware.race.rpc.model.RpcRequestWrapper;
+import com.alibaba.middleware.race.rpc.model.RpcResponseWrapper;
+import com.alibaba.middleware.race.rpc.model.SerializeWrapper;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import de.javakaffee.kryoserializers.*;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufInputStream;
-import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
@@ -30,6 +31,7 @@ import java.util.*;
  */
 public class KryoSerializer implements Serializer {
 
+    private static final byte[] LENGTH_PLACEHOLDER = new byte[4];
     private final ThreadLocal<Kryo> kryo = new ThreadLocal<Kryo>() {
         @Override
         protected Kryo initialValue() {
@@ -51,8 +53,6 @@ public class KryoSerializer implements Serializer {
             return kryo;
         }
     };
-
-    private static final byte[] LENGTH_PLACEHOLDER = new byte[4];
 
     @Override
     public Object decode(byte[] bytes) {
@@ -77,14 +77,14 @@ public class KryoSerializer implements Serializer {
     public ChannelInboundHandler decoder() {
         return new ChannelInboundHandlerAdapter() {
 
-            ByteBuf cumulation;
-            private boolean decodeWasNull;
             private final int maxFrameLength = 10485760;
             private final int lengthFieldOffset = 0;
             private final int lengthFieldLength = 4;
             private final int lengthFieldEndOffset = 4;
             private final int lengthAdjustment = 0;
             private final int initialBytesToStrip = 4;
+            ByteBuf cumulation;
+            private boolean decodeWasNull;
             private boolean discardingTooLongFrame;
             private long tooLongFrameLength;
             private long bytesToDiscard;
@@ -307,10 +307,12 @@ public class KryoSerializer implements Serializer {
 
             private Object decode(ByteBuf frame) {
                 try {
-                    ByteBufInputStream is = new ByteBufInputStream(frame);
-                    Input input = new Input(is);
-                    Object result = kryo.get().readClassAndObject(input);
-                    input.close();
+                    Object result;
+                    if (frame.readByte() == 0) {
+                        result = new RpcRequestWrapper().decode(frame);
+                    } else {
+                        result = new RpcResponseWrapper().decode(frame);
+                    }
                     return result;
                 } finally {
                     frame.release();
@@ -386,13 +388,11 @@ public class KryoSerializer implements Serializer {
             @Override
             protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception {
                 int startIdx = out.writerIndex();
-                ByteBufOutputStream bout = new ByteBufOutputStream(out);
-                bout.write(LENGTH_PLACEHOLDER);
-                Output output = new Output(bout);
-                kryo.get().writeClassAndObject(output, msg);
-                output.close();
+                out.writeInt(0);
+                ((SerializeWrapper) msg).encode(out);
                 int endIdx = out.writerIndex();
                 out.setInt(startIdx, endIdx - startIdx - 4);
+
             }
         };
     }
