@@ -6,12 +6,9 @@ import java.io.Serializable;
  * Created by Dawnwords on 2015/8/6.
  */
 public class RegisterMessage implements Serializable {
-    public enum ClientType {
-        Producer, Consumer
-    }
-
     private ClientType type;
     private String groupId;
+    private String topic;
     private String filter;
 
     public ClientType type() {
@@ -32,6 +29,15 @@ public class RegisterMessage implements Serializable {
         return this;
     }
 
+    public String topic() {
+        return topic;
+    }
+
+    public RegisterMessage topic(String topic) {
+        this.topic = topic;
+        return this;
+    }
+
     public String filter() {
         return filter;
     }
@@ -39,5 +45,19 @@ public class RegisterMessage implements Serializable {
     public RegisterMessage filter(String filter) {
         this.filter = filter;
         return this;
+    }
+
+    public enum ClientType {
+        Producer, Consumer
+    }
+
+    @Override
+    public String toString() {
+        return "RegisterMessage{" +
+                "type=" + type +
+                ", groupId='" + groupId + '\'' +
+                ", topic='" + topic + '\'' +
+                ", filter='" + filter + '\'' +
+                '}';
     }
 }
