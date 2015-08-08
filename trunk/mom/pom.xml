@@ -68,10 +68,5 @@
             <artifactId>netty-all</artifactId>
             <version>4.0.23.Final</version>
         </dependency>
-        <dependency>
-            <groupId>de.javakaffee</groupId>
-            <artifactId>kryo-serializers</artifactId>
-            <version>0.35</version>
-        </dependency>
     </dependencies>
 </project>
