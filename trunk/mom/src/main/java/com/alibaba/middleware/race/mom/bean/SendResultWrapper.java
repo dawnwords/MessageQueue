@@ -2,7 +2,7 @@ package com.alibaba.middleware.race.mom.bean;
 
 import com.alibaba.middleware.race.mom.SendResult;
 import com.alibaba.middleware.race.mom.SendStatus;
-import com.alibaba.middleware.race.mom.codec.Serializer;
+import com.alibaba.middleware.race.mom.util.ByteUtil;
 import io.netty.buffer.ByteBuf;
 
 /**
@@ -14,19 +14,19 @@ public class SendResultWrapper implements SerializeWrapper<SendResult> {
     private byte[] info;
 
     @Override
-    public SendResult deserialize(Serializer serializer) {
+    public SendResult deserialize() {
         SendResult result = new SendResult();
         result.setStatus(SendStatus.values()[status]);
         result.setMsgId(msgId);
-        result.setInfo((String) serializer.decode(info));
+        result.setInfo(ByteUtil.toString(info));
         return result;
     }
 
     @Override
-    public SerializeWrapper<SendResult> serialize(SendResult sendResult, Serializer serializer) {
+    public SerializeWrapper<SendResult> serialize(SendResult sendResult) {
         this.status = (byte) sendResult.getStatus().ordinal();
         this.msgId = sendResult.getMsgIdAsArray();
-        this.info = serializer.encode(sendResult.getInfo());
+        this.info = ByteUtil.toBytes(sendResult.getInfo());
         return this;
     }
 

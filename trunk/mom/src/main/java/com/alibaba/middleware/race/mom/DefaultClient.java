@@ -1,8 +1,8 @@
 package com.alibaba.middleware.race.mom;
 
 import com.alibaba.middleware.race.mom.bean.SerializeWrapper;
-import com.alibaba.middleware.race.mom.codec.SerializeType;
-import com.alibaba.middleware.race.mom.codec.Serializer;
+import com.alibaba.middleware.race.mom.codec.Decoder;
+import com.alibaba.middleware.race.mom.codec.Encoder;
 import com.alibaba.middleware.race.mom.util.Logger;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -13,7 +13,6 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 
 /**
  * Created by Dawnwords on 2015/8/8.
@@ -22,10 +21,8 @@ public abstract class DefaultClient {
     private final Bootstrap bootstrap;
     private final NioEventLoopGroup eventLoopGroup;
     protected Channel channel;
-    private SerializeType serializeType;
 
     public DefaultClient() {
-        this.serializeType = Parameter.SERIALIZE_TYPE;
         this.eventLoopGroup = new NioEventLoopGroup(Parameter.CLIENT_THREADS, new DefaultThreadFactory("NettyClientSelector"));
         this.bootstrap = new Bootstrap()
                 .group(eventLoopGroup)
@@ -56,9 +53,6 @@ public abstract class DefaultClient {
         });
     }
 
-    protected Serializer serializer() {
-        return serializeType.serializer();
-    }
 
     @ChannelHandler.Sharable
     private class Initializer extends ChannelInitializer<SocketChannel> {
@@ -66,9 +60,8 @@ public abstract class DefaultClient {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
-            Serializer serializer = serializeType.serializer();
-            pipeline.addLast("decoder", serializer.decoder());
-            pipeline.addLast("encoder", serializer.encoder());
+            pipeline.addLast("decoder", new Decoder());
+            pipeline.addLast("encoder", new Encoder());
             pipeline.addLast("handler", new MessageHandler());
         }
     }
@@ -78,10 +71,9 @@ public abstract class DefaultClient {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            Serializer serializer = serializer();
             if (msg instanceof List) {
                 for (Object o : (List) msg) {
-                    Object message = ((SerializeWrapper) o).deserialize(serializer);
+                    Object message = ((SerializeWrapper) o).deserialize();
                     Logger.info("[handle message] %s", message);
                     handleMessage(ctx, message);
                 }

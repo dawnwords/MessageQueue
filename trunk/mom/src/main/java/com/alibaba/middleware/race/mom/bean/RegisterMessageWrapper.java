@@ -1,6 +1,6 @@
 package com.alibaba.middleware.race.mom.bean;
 
-import com.alibaba.middleware.race.mom.codec.Serializer;
+import com.alibaba.middleware.race.mom.util.ByteUtil;
 import io.netty.buffer.ByteBuf;
 
 /**
@@ -13,20 +13,20 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
     private byte[] filter;
 
     @Override
-    public RegisterMessage deserialize(Serializer serializer) {
+    public RegisterMessage deserialize() {
         return new RegisterMessage()
                 .type(RegisterMessage.ClientType.values()[type])
-                .groupId((String) serializer.decode(this.groupId))
-                .topic((String) serializer.decode(this.topic))
-                .filter((String) serializer.decode(this.filter));
+                .groupId(ByteUtil.toString(this.groupId))
+                .topic(ByteUtil.toString(this.topic))
+                .filter(ByteUtil.toString(this.filter));
     }
 
     @Override
-    public SerializeWrapper<RegisterMessage> serialize(RegisterMessage msg, Serializer serializer) {
+    public SerializeWrapper<RegisterMessage> serialize(RegisterMessage msg) {
         this.type = (byte) msg.type().ordinal();
-        this.groupId = serializer.encode(msg.groupId());
-        this.topic = serializer.encode(msg.topic());
-        this.filter = serializer.encode(msg.filter());
+        this.groupId = ByteUtil.toBytes(msg.groupId());
+        this.topic = ByteUtil.toBytes(msg.topic());
+        this.filter = ByteUtil.toBytes(msg.filter());
         return this;
     }
 

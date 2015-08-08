@@ -1,6 +1,6 @@
 package com.alibaba.middleware.race.mom;
 
-import com.alibaba.middleware.race.mom.util.MessageIdUtil;
+import com.alibaba.middleware.race.mom.util.ByteUtil;
 
 public class SendResult {
     private SendStatus status;
@@ -39,7 +39,7 @@ public class SendResult {
     }
 
     public String getMsgId() {
-        return MessageIdUtil.toString(msgId);
+        return ByteUtil.messageId2String(msgId);
     }
 
     public void setMsgId(byte[] msgId) {
@@ -48,7 +48,11 @@ public class SendResult {
 
     @Override
     public String toString() {
-        return "msg " + msgId + "  send " + (status == SendStatus.SUCCESS ? "success" : "fail") + "   info:" + info;
+        return "SendResult{" +
+                "status=" + status +
+                ", msgId=" + ByteUtil.messageId2String(msgId) +
+                ", info='" + info + '\'' +
+                '}';
     }
 
     public byte[] getMsgIdAsArray() {

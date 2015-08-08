@@ -1,8 +1,8 @@
 package com.alibaba.middleware.race.mom;
 
 import com.alibaba.middleware.race.mom.bean.*;
-import com.alibaba.middleware.race.mom.codec.SerializeType;
-import com.alibaba.middleware.race.mom.codec.Serializer;
+import com.alibaba.middleware.race.mom.codec.Decoder;
+import com.alibaba.middleware.race.mom.codec.Encoder;
 import com.alibaba.middleware.race.mom.store.Storage;
 import com.alibaba.middleware.race.mom.util.Logger;
 import io.netty.bootstrap.ServerBootstrap;
@@ -19,10 +19,8 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by Dawnwords on 2015/8/6.
@@ -31,10 +29,11 @@ public class Broker extends Thread {
     private static final String NULL_FILTER = "[]";
     private DefaultEventExecutorGroup defaultEventExecutorGroup =
             new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
-    private BlockingQueue<MessageWrapper> sendQueue = new LinkedBlockingQueue<MessageWrapper>();
+    private Queue<MessageWrapper> sendQueue = new LinkedBlockingQueue<MessageWrapper>();
     private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers =
             new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
     private Storage storage = Parameter.STORAGE;
+    private AtomicBoolean fetchingUnsuccessfulMessage;
 
     public static void main(String[] args) {
         new Broker().start();
@@ -70,10 +69,10 @@ public class Broker extends Thread {
                         });
                     }
                 });
-    }
-
-    private SerializeType serializeType() {
-        return Parameter.SERIALIZE_TYPE;
+        ExecutorService threadPool = Executors.newCachedThreadPool();
+        for (int i = 0; i < Parameter.SERVER_EXECUTOR_THREADS; i++) {
+            threadPool.submit(new MessageWorker());
+        }
     }
 
     @ChannelHandler.Sharable
@@ -82,9 +81,8 @@ public class Broker extends Thread {
         @Override
         protected void initChannel(SocketChannel ch) throws Exception {
             ChannelPipeline pipeline = ch.pipeline();
-            Serializer serializer = serializeType().serializer();
-            pipeline.addLast(defaultEventExecutorGroup, "decoder", serializer.decoder());
-            pipeline.addLast(defaultEventExecutorGroup, "encoder", serializer.encoder());
+            pipeline.addLast(defaultEventExecutorGroup, "decoder", new Decoder());
+            pipeline.addLast(defaultEventExecutorGroup, "encoder", new Encoder());
             pipeline.addLast(defaultEventExecutorGroup, "handler", new BrokerHandler());
         }
     }
@@ -126,7 +124,6 @@ public class Broker extends Thread {
 
         @Override
         public void run() {
-            Serializer serializer = serializeType().serializer();
             if (wrapper instanceof MessageWrapper) {
                 Logger.info("[normal message]");
                 MessageWrapper message = (MessageWrapper) wrapper;
@@ -137,9 +134,10 @@ public class Broker extends Thread {
                 } else {
                     result = SendResult.fail(message.msgId(), "fail to save message");
                 }
-                ctx.writeAndFlush(new SendResultWrapper().serialize(result, serializer));
+                Logger.info("[send result] %s", result);
+                ctx.writeAndFlush(new SendResultWrapper().serialize(result));
             } else if (wrapper instanceof RegisterMessageWrapper) {
-                RegisterMessage register = ((RegisterMessageWrapper) wrapper).deserialize(serializer);
+                RegisterMessage register = ((RegisterMessageWrapper) wrapper).deserialize();
                 Logger.info("[register message] %s", register);
                 Map<String, Queue<Channel>> filterChannelQueue = consumers.get(register.topic());
                 if (filterChannelQueue == null) {
@@ -155,20 +153,29 @@ public class Broker extends Thread {
                 }
                 channels.add(ctx.channel());
 
+                // TODO delete
                 Message msg = new Message();
                 msg.setMsgId((InetSocketAddress) ctx.channel().localAddress());
                 msg.setTopic(register.topic());
                 String[] keyVal = filter.split("=");
                 msg.setProperty(keyVal[0], keyVal[1]);
                 msg.setBody("hello world".getBytes());
-                ctx.writeAndFlush(new MessageWrapper().serialize(msg, serializer));
+                ctx.writeAndFlush(new MessageWrapper().serialize(msg));
+                // delete end
             } else if (wrapper instanceof ConsumeResultWrapper) {
-                ConsumeResult result = ((ConsumeResultWrapper) wrapper).deserialize(serializer);
+                ConsumeResult result = ((ConsumeResultWrapper) wrapper).deserialize();
                 Logger.info("[consume result] %s", result);
                 if (result.getStatus() == ConsumeStatus.SUCCESS) {
                     storage.markSuccess(result.msgId());
                 }
             }
+        }
+    }
+
+    private class MessageWorker implements Runnable {
+        @Override
+        public void run() {
+
         }
     }
 }

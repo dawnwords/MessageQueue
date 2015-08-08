@@ -69,7 +69,7 @@ public class DefaultProducer extends DefaultClient implements Producer {
         final int msgIdHash = Arrays.hashCode(msgId);
         final ArrayBlockingQueue<SendResult> resultHolder = new ArrayBlockingQueue<SendResult>(1);
         sendResultMap.put(msgIdHash, resultHolder);
-        channel.writeAndFlush(new MessageWrapper().serialize(message, serializer()))
+        channel.writeAndFlush(new MessageWrapper().serialize(message))
                 .addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {

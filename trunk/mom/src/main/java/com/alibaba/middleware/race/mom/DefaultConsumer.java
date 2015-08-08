@@ -33,7 +33,7 @@ public class DefaultConsumer extends DefaultClient implements Consumer {
                 .type(RegisterMessage.ClientType.Consumer)
                 .groupId(groupId)
                 .topic(topic)
-                .filter(filter), serializer()));
+                .filter(filter)));
     }
 
     @Override
