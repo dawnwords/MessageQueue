@@ -1,7 +1,9 @@
 package com.alibaba.middleware.race.mom.bean;
 
 import com.alibaba.middleware.race.mom.Message;
+import com.alibaba.middleware.race.mom.store.MessageState;
 import com.alibaba.middleware.race.mom.store.Storable;
+import com.alibaba.middleware.race.mom.store.Storage;
 import com.alibaba.middleware.race.mom.util.ByteUtil;
 import io.netty.buffer.ByteBuf;
 
@@ -75,7 +77,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
 
     @Override
     public byte[] toStorage() {
-        int totalLen = 8;   //bornTime.length
+        int totalLen = 0;
         totalLen += 4 + topic.length;
         totalLen += 4 + body.length;
         totalLen += 4;      // propKey.size
@@ -83,8 +85,10 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
             totalLen += 4 + propKeys[i].length;
             totalLen += 4 + propVals[i].length;
         }
-        ByteBuffer result = ByteBuffer.allocate(totalLen);
-        result.putLong(bornTime);
+        ByteBuffer result = ByteBuffer.allocate(totalLen + 24/*id + status + length*/);
+        result.put(msgId);
+        result.putInt(MessageState.FAIL.ordinal());
+        result.putInt(totalLen);
         put(result, topic);
         put(result, body);
         result.putInt(propKeys.length);
@@ -96,9 +100,14 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
     }
 
     @Override
-    public SerializeWrapper<Message> fromStorage(byte[] id, byte[] bytes) {
+    public SerializeWrapper<Message> fromStorage(byte[] bytes) {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        this.bornTime = buffer.getLong();
+        this.msgId = new byte[16];
+        buffer.get(msgId);
+        buffer.getLong();   //ignore status & length
+        ByteBuffer timeBuffer = ByteBuffer.wrap(msgId);
+        timeBuffer.getLong();   //ignore ip & port
+        this.bornTime = timeBuffer.getLong();
         this.topic = get(buffer);
         this.body = get(buffer);
         int propertiesLen = buffer.getInt();
@@ -108,7 +117,6 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
             this.propKeys[i] = get(buffer);
             this.propVals[i] = get(buffer);
         }
-        this.msgId = id;
         return this;
     }
 
