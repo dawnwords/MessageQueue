@@ -11,8 +11,10 @@ public class DefaultConsumer extends DefaultClient implements Consumer {
     private MessageListener listener;
 
     @Override
-    protected void handleMessage(ChannelHandlerContext ctx, Object msg) {
-
+    protected void handleMessage(ChannelHandlerContext ctx, Object o) {
+        Message msg = (Message) o;
+        Logger.info("[receive message] %s", msg);
+        listener.onMessage(msg);
     }
 
     @Override
