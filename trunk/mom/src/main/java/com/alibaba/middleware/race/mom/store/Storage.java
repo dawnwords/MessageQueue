@@ -11,6 +11,8 @@ public interface Storage {
 
     boolean markSuccess(byte[] id);
 
-    List<byte[]/* content */> unsuccessfulList();
+    boolean markFail(byte[] id);
+
+    List<byte[]/* content */> failList();
 
 }
