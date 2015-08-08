@@ -6,5 +6,5 @@ package com.alibaba.middleware.race.mom.store;
 public interface Storable<T> {
     byte[] toStorage();
 
-    T fromStorage(byte[] key, byte[] bytes);
+    T fromStorage(byte[] bytes);
 }
