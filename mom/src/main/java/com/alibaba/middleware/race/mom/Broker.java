@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by Dawnwords on 2015/8/6.
@@ -33,7 +32,6 @@ public class Broker extends Thread {
     private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers =
             new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
     private Storage storage = Parameter.STORAGE;
-    private AtomicBoolean fetchingUnsuccessfulMessage;
 
     public static void main(String[] args) {
         new Broker().start();
@@ -41,7 +39,8 @@ public class Broker extends Thread {
 
     @Override
     public void run() {
-        final EventLoopGroup bossGroup = new NioEventLoopGroup(Parameter.SERVER_BOSS_THREADS, new DefaultThreadFactory("NettyBossSelector"));
+        final EventLoopGroup bossGroup = new NioEventLoopGroup(
+                Parameter.SERVER_BOSS_THREADS, new DefaultThreadFactory("NettyBossSelector"));
         final EventLoopGroup workerGroup = new NioEventLoopGroup(
                 Parameter.SERVER_WORKER_THREADS, new DefaultThreadFactory("NettyServerSelector"));
         new ServerBootstrap()
@@ -152,16 +151,6 @@ public class Broker extends Thread {
                     filterChannelQueue.put(filter, channels);
                 }
                 channels.add(ctx.channel());
-
-                // TODO delete
-                Message msg = new Message();
-                msg.setMsgId((InetSocketAddress) ctx.channel().localAddress());
-                msg.setTopic(register.topic());
-                String[] keyVal = filter.split("=");
-                msg.setProperty(keyVal[0], keyVal[1]);
-                msg.setBody("hello world".getBytes());
-                ctx.writeAndFlush(new MessageWrapper().serialize(msg));
-                // delete end
             } else if (wrapper instanceof ConsumeResultWrapper) {
                 ConsumeResult result = ((ConsumeResultWrapper) wrapper).deserialize();
                 Logger.info("[consume result] %s", result);
@@ -175,7 +164,32 @@ public class Broker extends Thread {
     private class MessageWorker implements Runnable {
         @Override
         public void run() {
+            while (true) {
+                boolean shouldLoad = sendQueue.size() <= 1;
+                if (shouldLoad) {
+                    for (byte[] message : storage.failList()) {
+                        sendQueue.add(new MessageWrapper().fromStorage(message));
+                    }
+                } else {
+                    MessageWrapper message = sendQueue.poll();
+                    String topic = message.topic();
+                    String filter = message.filter();
 
+                    Map<String, Queue<Channel>> filterChannelMap = consumers.get(topic);
+                    if (filterChannelMap != null) {
+                        Queue<Channel> channels = filterChannelMap.get(filter);
+                        if (channels != null) {
+                            Channel consumer = channels.poll();
+                            consumer.writeAndFlush(message);
+                            channels.add(consumer);
+                        } else {
+                            Logger.error("[unknown filter] %s", filter);
+                        }
+                    } else {
+                        Logger.error("[unknown topic] %s", topic);
+                    }
+                }
+            }
         }
     }
 }

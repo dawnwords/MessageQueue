@@ -23,7 +23,7 @@ public class SendResultWrapper implements SerializeWrapper<SendResult> {
     }
 
     @Override
-    public SerializeWrapper<SendResult> serialize(SendResult sendResult) {
+    public SendResultWrapper serialize(SendResult sendResult) {
         this.status = (byte) sendResult.getStatus().ordinal();
         this.msgId = sendResult.getMsgIdAsArray();
         this.info = ByteUtil.toBytes(sendResult.getInfo());
@@ -39,7 +39,7 @@ public class SendResultWrapper implements SerializeWrapper<SendResult> {
     }
 
     @Override
-    public SerializeWrapper<SendResult> decode(ByteBuf in) {
+    public SendResultWrapper decode(ByteBuf in) {
         status = in.readByte();
         msgId = new byte[16];
         in.readBytes(msgId);
