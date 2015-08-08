@@ -1,13 +1,22 @@
 package com.alibaba.middleware.race.mom;
 
 public class ConsumeResult {
-    private ConsumeStatus status = ConsumeStatus.FAIL;
+    private ConsumeStatus status;
+    private byte[] msgId;
     private String info;
 
-    public static ConsumeResult successResult(String info) {
+    public static ConsumeResult success(byte[] msgId) {
         ConsumeResult result = new ConsumeResult();
-        result.setStatus(ConsumeStatus.SUCCESS);
-        result.setInfo(info);
+        result.status = ConsumeStatus.SUCCESS;
+        result.msgId = msgId;
+        return result;
+    }
+
+    public static ConsumeResult fail(byte[] msgId, String info) {
+        ConsumeResult result = new ConsumeResult();
+        result.status = ConsumeStatus.FAIL;
+        result.msgId = msgId;
+        result.info = info;
         return result;
     }
 
@@ -27,11 +36,7 @@ public class ConsumeResult {
         this.info = info;
     }
 
-    @Override
-    public String toString() {
-        return "ConsumeResult{" +
-                "status=" + status +
-                ", info='" + info + '\'' +
-                '}';
+    public byte[] msgId() {
+        return msgId;
     }
 }

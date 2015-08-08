@@ -1,9 +1,6 @@
 package com.alibaba.middleware.race.mom;
 
-import com.alibaba.middleware.race.mom.bean.MessageWrapper;
-import com.alibaba.middleware.race.mom.bean.RegisterMessageWrapper;
-import com.alibaba.middleware.race.mom.bean.SendResultWrapper;
-import com.alibaba.middleware.race.mom.bean.SerializeWrapper;
+import com.alibaba.middleware.race.mom.bean.*;
 import com.alibaba.middleware.race.mom.codec.SerializeType;
 import com.alibaba.middleware.race.mom.codec.Serializer;
 import com.alibaba.middleware.race.mom.store.Storage;
@@ -18,17 +15,20 @@ import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Created by Dawnwords on 2015/8/6.
  */
 public class Broker extends Thread {
+    private static final String NULL_FILTER = "[]";
     private DefaultEventExecutorGroup defaultEventExecutorGroup =
             new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
     private BlockingQueue<MessageWrapper> sendQueue = new LinkedBlockingQueue<MessageWrapper>();
@@ -139,9 +139,36 @@ public class Broker extends Thread {
                 }
                 ctx.writeAndFlush(new SendResultWrapper().serialize(result, serializer));
             } else if (wrapper instanceof RegisterMessageWrapper) {
-                Logger.info("[register message]");
+                RegisterMessage register = ((RegisterMessageWrapper) wrapper).deserialize(serializer);
+                Logger.info("[register message] %s", register);
+                Map<String, Queue<Channel>> filterChannelQueue = consumers.get(register.topic());
+                if (filterChannelQueue == null) {
+                    filterChannelQueue = new ConcurrentHashMap<String, Queue<Channel>>();
+                    consumers.put(register.topic(), filterChannelQueue);
+                }
+                String filter = register.filter();
+                filter = filter == null ? NULL_FILTER : filter;
+                Queue<Channel> channels = filterChannelQueue.get(filter);
+                if (channels == null) {
+                    channels = new ConcurrentLinkedQueue<Channel>();
+                    filterChannelQueue.put(filter, channels);
+                }
+                channels.add(ctx.channel());
+
+                Message msg = new Message();
+                msg.setMsgId((InetSocketAddress) ctx.channel().localAddress());
+                msg.setTopic(register.topic());
+                String[] keyVal = filter.split("=");
+                msg.setProperty(keyVal[0], keyVal[1]);
+                msg.setBody("hello world".getBytes());
+                ctx.writeAndFlush(new MessageWrapper().serialize(msg, serializer));
+            } else if (wrapper instanceof ConsumeResultWrapper) {
+                ConsumeResult result = ((ConsumeResultWrapper) wrapper).deserialize(serializer);
+                Logger.info("[consume result] %s", result);
+                if (result.getStatus() == ConsumeStatus.SUCCESS) {
+                    storage.markSuccess(result.msgId());
+                }
             }
-            //TODO finish handle request logic
         }
     }
 }

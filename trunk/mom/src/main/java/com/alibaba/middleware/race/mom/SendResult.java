@@ -9,16 +9,16 @@ public class SendResult {
 
     public static SendResult fail(byte[] msgId, String info) {
         SendResult result = new SendResult();
-        result.setStatus(SendStatus.FAIL);
-        result.setMsgId(msgId);
-        result.setInfo(info);
+        result.status = SendStatus.FAIL;
+        result.msgId = msgId;
+        result.info = info;
         return result;
     }
 
     public static SendResult success(byte[] msgId) {
         SendResult result = new SendResult();
-        result.setStatus(SendStatus.SUCCESS);
-        result.setMsgId(msgId);
+        result.status = SendStatus.SUCCESS;
+        result.msgId = msgId;
         return result;
     }
 
