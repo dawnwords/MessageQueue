@@ -3,7 +3,6 @@ package com.alibaba.middleware.race.mom.bean;
 import com.alibaba.middleware.race.mom.Message;
 import com.alibaba.middleware.race.mom.store.MessageState;
 import com.alibaba.middleware.race.mom.store.Storable;
-import com.alibaba.middleware.race.mom.store.Storage;
 import com.alibaba.middleware.race.mom.util.ByteUtil;
 import io.netty.buffer.ByteBuf;
 
@@ -13,7 +12,7 @@ import java.util.Map;
 /**
  * Created by Dawnwords on 2015/8/6.
  */
-public class MessageWrapper implements SerializeWrapper<Message>, Storable<SerializeWrapper<Message>> {
+public class MessageWrapper implements SerializeWrapper<Message>, Storable<MessageWrapper> {
     private byte[] topic;
     private byte[] body;
     private byte[] msgId;
@@ -35,7 +34,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
     }
 
     @Override
-    public SerializeWrapper<Message> serialize(Message msg) {
+    public MessageWrapper serialize(Message msg) {
         this.topic = ByteUtil.toBytes(msg.getTopic());
         this.body = msg.getBody();
         this.msgId = msg.getMsgIdAsByte();
@@ -64,7 +63,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
     }
 
     @Override
-    public SerializeWrapper<Message> decode(ByteBuf in) {
+    public MessageWrapper decode(ByteBuf in) {
         this.topic = Decoder.decode(in);
         this.body = Decoder.decode(in);
         this.msgId = new byte[16];
@@ -100,7 +99,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
     }
 
     @Override
-    public SerializeWrapper<Message> fromStorage(byte[] bytes) {
+    public MessageWrapper fromStorage(byte[] bytes) {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
         this.msgId = new byte[16];
         buffer.get(msgId);
@@ -140,5 +139,25 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
 
     public byte[] msgId() {
         return msgId;
+    }
+
+    public String topic() {
+        return ByteUtil.toString(topic);
+    }
+
+    public String filter() {
+        int i = 0;
+        StringBuilder builder = new StringBuilder();
+        builder.append(ByteUtil.toString(propKeys[i]));
+        builder.append("=");
+        builder.append(ByteUtil.toString(propVals[i]));
+        i++;
+        for (; i < propKeys.length; i++) {
+            builder.append(";");
+            builder.append(ByteUtil.toString(propKeys[i]));
+            builder.append("=");
+            builder.append(ByteUtil.toString(propVals[i]));
+        }
+        return builder.toString();
     }
 }

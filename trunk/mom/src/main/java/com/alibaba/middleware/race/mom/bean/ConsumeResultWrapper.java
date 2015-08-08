@@ -21,7 +21,7 @@ public class ConsumeResultWrapper implements SerializeWrapper<ConsumeResult> {
     }
 
     @Override
-    public SerializeWrapper<ConsumeResult> serialize(ConsumeResult consumeResult) {
+    public ConsumeResultWrapper serialize(ConsumeResult consumeResult) {
         this.status = (byte) consumeResult.getStatus().ordinal();
         this.info = ByteUtil.toBytes(consumeResult.getInfo());
         return this;
@@ -35,7 +35,7 @@ public class ConsumeResultWrapper implements SerializeWrapper<ConsumeResult> {
     }
 
     @Override
-    public SerializeWrapper<ConsumeResult> decode(ByteBuf in) {
+    public ConsumeResultWrapper decode(ByteBuf in) {
         status = in.readByte();
         info = Decoder.decode(in);
         return this;

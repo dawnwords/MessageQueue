@@ -22,7 +22,7 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
     }
 
     @Override
-    public SerializeWrapper<RegisterMessage> serialize(RegisterMessage msg) {
+    public RegisterMessageWrapper serialize(RegisterMessage msg) {
         this.type = (byte) msg.type().ordinal();
         this.groupId = ByteUtil.toBytes(msg.groupId());
         this.topic = ByteUtil.toBytes(msg.topic());
@@ -40,7 +40,7 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
     }
 
     @Override
-    public SerializeWrapper<RegisterMessage> decode(ByteBuf in) {
+    public RegisterMessageWrapper decode(ByteBuf in) {
         this.type = in.readByte();
         this.groupId = Decoder.decode(in);
         this.topic = Decoder.decode(in);
