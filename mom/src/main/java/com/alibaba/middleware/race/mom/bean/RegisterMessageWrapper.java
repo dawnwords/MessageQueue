@@ -9,6 +9,7 @@ import io.netty.buffer.ByteBuf;
 public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage> {
     private byte type;
     private byte[] groupId;
+    private byte[] topic;
     private byte[] filter;
 
     @Override
@@ -16,6 +17,7 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
         return new RegisterMessage()
                 .type(RegisterMessage.ClientType.values()[type])
                 .groupId((String) serializer.decode(this.groupId))
+                .topic((String) serializer.decode(this.topic))
                 .filter((String) serializer.decode(this.filter));
     }
 
@@ -23,6 +25,7 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
     public SerializeWrapper<RegisterMessage> serialize(RegisterMessage msg, Serializer serializer) {
         this.type = (byte) msg.type().ordinal();
         this.groupId = serializer.encode(msg.groupId());
+        this.topic = serializer.encode(msg.topic());
         this.filter = serializer.encode(msg.filter());
         return this;
     }
@@ -32,6 +35,7 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
         out.writeByte(REGISTER);
         out.writeByte(type);
         Encoder.encode(out, groupId);
+        Encoder.encode(out, topic);
         Encoder.encode(out, filter);
     }
 
@@ -39,6 +43,7 @@ public class RegisterMessageWrapper implements SerializeWrapper<RegisterMessage>
     public SerializeWrapper<RegisterMessage> decode(ByteBuf in) {
         this.type = in.readByte();
         this.groupId = Decoder.decode(in);
+        this.topic = Decoder.decode(in);
         this.filter = Decoder.decode(in);
         return this;
     }

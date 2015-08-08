@@ -20,4 +20,6 @@ public class Parameter {
     public static final int RCV_BUF_SIZE = 65535;
 
     public static final SerializeType SERIALIZE_TYPE = SerializeType.kryo;
+
+    public static final int RESEND_NUM = 100;
 }

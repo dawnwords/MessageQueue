@@ -1,6 +1,7 @@
 package com.alibaba.middleware.race.mom;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -70,4 +71,14 @@ public class Message implements Serializable {
         this.bornTime = bornTime;
     }
 
+    @Override
+    public String toString() {
+        return "Message{" +
+                "topic='" + topic + '\'' +
+                ", body=" + Arrays.toString(body) +
+                ", msgId='" + msgId + '\'' +
+                ", bornTime=" + bornTime +
+                ", properties=" + properties +
+                '}';
+    }
 }
