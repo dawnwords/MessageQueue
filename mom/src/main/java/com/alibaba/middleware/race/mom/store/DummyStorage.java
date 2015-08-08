@@ -18,7 +18,12 @@ public class DummyStorage implements Storage {
     }
 
     @Override
-    public List<byte[]> unsuccessfulList() {
+    public boolean markFail(byte[] id) {
+        return true;
+    }
+
+    @Override
+    public List<byte[]> failList() {
         return Collections.emptyList();
     }
 }
