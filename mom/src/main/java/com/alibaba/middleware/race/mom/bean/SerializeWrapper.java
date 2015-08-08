@@ -1,6 +1,5 @@
 package com.alibaba.middleware.race.mom.bean;
 
-import com.alibaba.middleware.race.mom.codec.Serializer;
 import io.netty.buffer.ByteBuf;
 
 import java.io.Serializable;
@@ -14,9 +13,9 @@ public interface SerializeWrapper<T> extends Serializable {
     int CONSUME_RESULT = 2;
     int SEND_RESULT = 4;
 
-    T deserialize(Serializer serializer);
+    T deserialize();
 
-    SerializeWrapper<T> serialize(T obj, Serializer serializer);
+    SerializeWrapper<T> serialize(T obj);
 
     void encode(ByteBuf out);
 

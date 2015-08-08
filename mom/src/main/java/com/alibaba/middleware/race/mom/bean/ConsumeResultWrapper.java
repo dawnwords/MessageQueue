@@ -2,7 +2,7 @@ package com.alibaba.middleware.race.mom.bean;
 
 import com.alibaba.middleware.race.mom.ConsumeResult;
 import com.alibaba.middleware.race.mom.ConsumeStatus;
-import com.alibaba.middleware.race.mom.codec.Serializer;
+import com.alibaba.middleware.race.mom.util.ByteUtil;
 import io.netty.buffer.ByteBuf;
 
 /**
@@ -13,17 +13,17 @@ public class ConsumeResultWrapper implements SerializeWrapper<ConsumeResult> {
     private byte[] info;
 
     @Override
-    public ConsumeResult deserialize(Serializer serializer) {
+    public ConsumeResult deserialize() {
         ConsumeResult result = new ConsumeResult();
         result.setStatus(ConsumeStatus.values()[status]);
-        result.setInfo((String) serializer.decode(info));
+        result.setInfo(ByteUtil.toString(info));
         return result;
     }
 
     @Override
-    public SerializeWrapper<ConsumeResult> serialize(ConsumeResult consumeResult, Serializer serializer) {
+    public SerializeWrapper<ConsumeResult> serialize(ConsumeResult consumeResult) {
         this.status = (byte) consumeResult.getStatus().ordinal();
-        this.info = serializer.encode(consumeResult.getInfo());
+        this.info = ByteUtil.toBytes(consumeResult.getInfo());
         return this;
     }
 

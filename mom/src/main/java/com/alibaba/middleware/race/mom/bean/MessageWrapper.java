@@ -1,13 +1,11 @@
 package com.alibaba.middleware.race.mom.bean;
 
 import com.alibaba.middleware.race.mom.Message;
-import com.alibaba.middleware.race.mom.codec.Serializer;
 import com.alibaba.middleware.race.mom.store.Storable;
-import com.alibaba.middleware.race.mom.util.MessageIdUtil;
+import com.alibaba.middleware.race.mom.util.ByteUtil;
 import io.netty.buffer.ByteBuf;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Map;
 
 /**
@@ -22,21 +20,21 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
     private byte[][] propVals;
 
     @Override
-    public Message deserialize(Serializer serializer) {
+    public Message deserialize() {
         Message result = new Message();
-        result.setTopic((String) serializer.decode(topic));
+        result.setTopic(ByteUtil.toString(topic));
         result.setBody(body);
         result.setMsgId(msgId);
         result.setBornTime(bornTime);
         for (int i = 0; i < propKeys.length; i++) {
-            result.setProperty((String) serializer.decode(propKeys[i]), (String) serializer.decode(propVals[i]));
+            result.setProperty(ByteUtil.toString(propKeys[i]), ByteUtil.toString(propVals[i]));
         }
         return result;
     }
 
     @Override
-    public SerializeWrapper<Message> serialize(Message msg, Serializer serializer) {
-        this.topic = serializer.encode(msg.getTopic());
+    public SerializeWrapper<Message> serialize(Message msg) {
+        this.topic = ByteUtil.toBytes(msg.getTopic());
         this.body = msg.getBody();
         this.msgId = msg.getMsgIdAsByte();
         this.bornTime = msg.getBornTime();
@@ -45,8 +43,8 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
         this.propVals = new byte[properties.size()][];
         int i = 0;
         for (String key : properties.keySet()) {
-            propKeys[i] = serializer.encode(key);
-            propVals[i] = serializer.encode(properties.get(key));
+            propKeys[i] = ByteUtil.toBytes(key);
+            propVals[i] = ByteUtil.toBytes(properties.get(key));
             i++;
         }
         return this;
@@ -128,7 +126,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Seria
     @Override
     public String toString() {
         return "MessageWrapper{" +
-                "msgId=" + MessageIdUtil.toString(msgId) +
+                "msgId=" + ByteUtil.messageId2String(msgId) +
                 '}';
     }
 
