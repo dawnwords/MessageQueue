@@ -17,7 +17,7 @@ public class SendResultWrapper implements SerializeWrapper<SendResult> {
     public SendResult deserialize(Serializer serializer) {
         SendResult result = new SendResult();
         result.setStatus(SendStatus.values()[status]);
-        result.setMsgId((String) serializer.decode(msgId));
+        result.setMsgId(msgId);
         result.setInfo((String) serializer.decode(info));
         return result;
     }
@@ -25,7 +25,7 @@ public class SendResultWrapper implements SerializeWrapper<SendResult> {
     @Override
     public SerializeWrapper<SendResult> serialize(SendResult sendResult, Serializer serializer) {
         this.status = (byte) sendResult.getStatus().ordinal();
-        this.msgId = serializer.encode(sendResult.getMsgId());
+        this.msgId = sendResult.getMsgIdAsArray();
         this.info = serializer.encode(sendResult.getInfo());
         return this;
     }

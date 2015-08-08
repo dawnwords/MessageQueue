@@ -1,7 +1,12 @@
 package com.alibaba.middleware.race.mom;
 
+import com.alibaba.middleware.race.mom.bean.MessageWrapper;
+import com.alibaba.middleware.race.mom.bean.RegisterMessageWrapper;
+import com.alibaba.middleware.race.mom.bean.SendResultWrapper;
+import com.alibaba.middleware.race.mom.bean.SerializeWrapper;
 import com.alibaba.middleware.race.mom.codec.SerializeType;
 import com.alibaba.middleware.race.mom.codec.Serializer;
+import com.alibaba.middleware.race.mom.store.Storage;
 import com.alibaba.middleware.race.mom.util.Logger;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -14,14 +19,26 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Created by Dawnwords on 2015/8/6.
  */
 public class Broker extends Thread {
     private DefaultEventExecutorGroup defaultEventExecutorGroup =
-            new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS,
-                    new DefaultThreadFactory("NettyServerWorkerThread"));
+            new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
+    private BlockingQueue<MessageWrapper> sendQueue = new LinkedBlockingQueue<MessageWrapper>();
+    private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers =
+            new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
+    private Storage storage = Parameter.STORAGE;
+
+    public static void main(String[] args) {
+        new Broker().start();
+    }
 
     @Override
     public void run() {
@@ -77,9 +94,10 @@ public class Broker extends Thread {
 
         @Override
         public void channelRead(final ChannelHandlerContext ctx, Object msg) {
+            Logger.info("[channel read] %s", msg);
             if (msg instanceof List) {
                 for (Object o : (List) msg) {
-                    ctx.channel().eventLoop().submit(new RequestWorker(ctx, o));
+                    ctx.channel().eventLoop().submit(new RequestWorker(ctx, (SerializeWrapper) o));
                 }
             } else {
                 Logger.error("[unknown request type]");
@@ -98,22 +116,32 @@ public class Broker extends Thread {
     }
 
     private class RequestWorker implements Runnable {
-        private final Object msg;
+        private final SerializeWrapper wrapper;
         private final ChannelHandlerContext ctx;
 
-        public RequestWorker(ChannelHandlerContext ctx, Object msg) {
+        public RequestWorker(ChannelHandlerContext ctx, SerializeWrapper wrapper) {
             this.ctx = ctx;
-            this.msg = msg;
+            this.wrapper = wrapper;
         }
 
         @Override
         public void run() {
+            Serializer serializer = serializeType().serializer();
+            if (wrapper instanceof MessageWrapper) {
+                Logger.info("[normal message]");
+                MessageWrapper message = (MessageWrapper) wrapper;
+                SendResult result;
+                if (storage.insert(message.toStorage())) {
+                    result = SendResult.success(message.msgId());
+                    sendQueue.offer(message);
+                } else {
+                    result = SendResult.fail(message.msgId(), "fail to save message");
+                }
+                ctx.writeAndFlush(new SendResultWrapper().serialize(result, serializer));
+            } else if (wrapper instanceof RegisterMessageWrapper) {
+                Logger.info("[register message]");
+            }
             //TODO finish handle request logic
         }
     }
-
-    public static void main(String[] args) {
-        new Broker().start();
-    }
-
 }

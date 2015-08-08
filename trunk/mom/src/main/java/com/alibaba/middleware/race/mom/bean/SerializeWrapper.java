@@ -25,7 +25,7 @@ public interface SerializeWrapper<T> extends Serializable {
     class Decoder {
         static byte[] decode(ByteBuf in) {
             int len = in.readInt();
-            if (len == 0) return null;
+            if (len < 0) return null;
             byte[] result = new byte[len];
             in.readBytes(result);
             return result;
@@ -33,7 +33,7 @@ public interface SerializeWrapper<T> extends Serializable {
 
         static byte[][] decodeArray(ByteBuf in) {
             int len = in.readInt();
-            if (len == 0) return null;
+            if (len < 0) return null;
             byte[][] result = new byte[len][];
             for (int i = 0; i < result.length; i++) {
                 result[i] = decode(in);
@@ -45,7 +45,7 @@ public interface SerializeWrapper<T> extends Serializable {
     class Encoder {
         static void encode(ByteBuf out, byte[] bytes) {
             if (bytes == null) {
-                out.writeInt(0);
+                out.writeInt(-1);
             } else {
                 out.writeInt(bytes.length);
                 out.writeBytes(bytes);
@@ -54,7 +54,7 @@ public interface SerializeWrapper<T> extends Serializable {
 
         static void encode(ByteBuf out, byte[][] bytes) {
             if (bytes == null) {
-                out.writeInt(0);
+                out.writeInt(-1);
             } else {
                 out.writeInt(bytes.length);
                 for (byte[] b : bytes) {

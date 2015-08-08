@@ -1,6 +1,9 @@
 package com.alibaba.middleware.race.mom;
 
+import com.alibaba.middleware.race.mom.util.MessageIdUtil;
+
 import java.io.Serializable;
+import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -8,32 +11,37 @@ import java.util.Map;
 public class Message implements Serializable {
     private String topic;
     private byte[] body;
-    private String msgId;   //全局唯一的消息id，不同消息不能重复
+    private byte[] msgId;   //全局唯一的消息id，不同消息不能重复
     private long bornTime;
     private Map<String, String> properties = new HashMap<String, String>();
 
-    public void setTopic(String topic) {
-        this.topic = topic;
-    }
-
     public String getMsgId() {
-        return msgId;
+        return MessageIdUtil.toString(msgId);
     }
 
-    public void setMsgId(String msgId) {
+    public void setMsgId(byte[] msgId) {
         this.msgId = msgId;
+    }
+
+    public void setMsgId(InetSocketAddress address) {
+        this.bornTime = System.nanoTime();//TODO milli possible?
+        this.msgId = MessageIdUtil.createMesageId(address, bornTime);
     }
 
     public String getTopic() {
         return topic;
     }
 
-    public void setBody(byte[] body) {
-        this.body = body;
+    public void setTopic(String topic) {
+        this.topic = topic;
     }
 
     public byte[] getBody() {
         return body;
+    }
+
+    public void setBody(byte[] body) {
+        this.body = body;
     }
 
     public String getProperty(String key) {
@@ -80,5 +88,10 @@ public class Message implements Serializable {
                 ", bornTime=" + bornTime +
                 ", properties=" + properties +
                 '}';
+    }
+
+
+    public byte[] getMsgIdAsByte() {
+        return msgId;
     }
 }
