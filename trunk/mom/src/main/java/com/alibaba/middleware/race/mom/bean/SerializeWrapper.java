@@ -62,4 +62,14 @@ public interface SerializeWrapper<T> extends Serializable {
             }
         }
     }
+
+    class Bytes{
+        static byte[] toBytes(String s) {
+            return s == null ? null : s.getBytes();
+        }
+
+        static String toString(byte[] bytes) {
+            return bytes == null ? null : new String(bytes);
+        }
+    }
 }

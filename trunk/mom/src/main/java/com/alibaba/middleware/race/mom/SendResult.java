@@ -1,13 +1,13 @@
 package com.alibaba.middleware.race.mom;
 
-import com.alibaba.middleware.race.mom.util.ByteUtil;
+import com.alibaba.middleware.race.mom.bean.MessageId;
 
 public class SendResult {
     private SendStatus status;
-    private byte[] msgId;
+    private MessageId msgId;
     private String info;
 
-    public static SendResult fail(byte[] msgId, String info) {
+    public static SendResult fail(MessageId msgId, String info) {
         SendResult result = new SendResult();
         result.status = SendStatus.FAIL;
         result.msgId = msgId;
@@ -15,7 +15,7 @@ public class SendResult {
         return result;
     }
 
-    public static SendResult success(byte[] msgId) {
+    public static SendResult success(MessageId msgId) {
         SendResult result = new SendResult();
         result.status = SendStatus.SUCCESS;
         result.msgId = msgId;
@@ -39,23 +39,23 @@ public class SendResult {
     }
 
     public String getMsgId() {
-        return ByteUtil.messageId2String(msgId);
+        return msgId.toString();
     }
 
     public void setMsgId(byte[] msgId) {
-        this.msgId = msgId;
+        this.msgId = new MessageId(msgId);
     }
 
     @Override
     public String toString() {
         return "SendResult{" +
                 "status=" + status +
-                ", msgId=" + ByteUtil.messageId2String(msgId) +
+                ", msgId=" + msgId +
                 ", info='" + info + '\'' +
                 '}';
     }
 
-    public byte[] getMsgIdAsArray() {
+    public MessageId getMessageId() {
         return msgId;
     }
 }

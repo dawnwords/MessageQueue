@@ -15,7 +15,6 @@ import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -24,21 +23,23 @@ import java.util.concurrent.*;
 /**
  * Created by Dawnwords on 2015/8/6.
  */
-public class Broker extends Thread {
+public class Broker {
     private static final String NULL_FILTER = "[]";
     private DefaultEventExecutorGroup defaultEventExecutorGroup =
             new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
     private Queue<MessageWrapper> sendQueue = new LinkedBlockingQueue<MessageWrapper>();
     private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers =
             new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
+    private Map<MessageId, BlockingQueue<ConsumeResult>> sendResultMap =
+            new ConcurrentHashMap<MessageId, BlockingQueue<ConsumeResult>>();
+    private volatile boolean stop;
     private Storage storage = Parameter.STORAGE;
 
     public static void main(String[] args) {
         new Broker().start();
     }
 
-    @Override
-    public void run() {
+    public void start() {
         final EventLoopGroup bossGroup = new NioEventLoopGroup(
                 Parameter.SERVER_BOSS_THREADS, new DefaultThreadFactory("NettyBossSelector"));
         final EventLoopGroup workerGroup = new NioEventLoopGroup(
@@ -61,6 +62,7 @@ public class Broker extends Thread {
                         channelFuture.channel().closeFuture().addListener(new ChannelFutureListener() {
                             @Override
                             public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                                stop = true;
                                 workerGroup.shutdownGracefully();
                                 bossGroup.shutdownGracefully();
                                 defaultEventExecutorGroup.shutdownGracefully();
@@ -144,7 +146,7 @@ public class Broker extends Thread {
                     consumers.put(register.topic(), filterChannelQueue);
                 }
                 String filter = register.filter();
-                filter = filter == null ? NULL_FILTER : filter;
+                filter = filter == null || "".equals(filter) ? NULL_FILTER : filter;
                 Queue<Channel> channels = filterChannelQueue.get(filter);
                 if (channels == null) {
                     channels = new ConcurrentLinkedQueue<Channel>();
@@ -154,8 +156,12 @@ public class Broker extends Thread {
             } else if (wrapper instanceof ConsumeResultWrapper) {
                 ConsumeResult result = ((ConsumeResultWrapper) wrapper).deserialize();
                 Logger.info("[consume result] %s", result);
-                if (result.getStatus() == ConsumeStatus.SUCCESS) {
-                    storage.markSuccess(result.msgId());
+                MessageId msgId = result.msgId();
+                BlockingQueue<ConsumeResult> resultHolder = sendResultMap.get(msgId);
+                if (resultHolder != null) {
+                    resultHolder.offer(result);
+                } else {
+                    Logger.error("[unknown send result id] %s", msgId);
                 }
             }
         }
@@ -164,11 +170,20 @@ public class Broker extends Thread {
     private class MessageWorker implements Runnable {
         @Override
         public void run() {
-            while (true) {
+            while (!stop) {
                 boolean shouldLoad = sendQueue.size() <= 1;
                 if (shouldLoad) {
-                    for (byte[] message : storage.failList()) {
-                        sendQueue.add(new MessageWrapper().fromStorage(message));
+                    List<byte[]> failList = storage.failList();
+                    if (failList.size() == 0) {
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException ignored) {
+                        }
+                    } else {
+                        for (byte[] message : failList) {
+                            sendQueue.add(new MessageWrapper().fromStorage(message));
+                        }
+                        Logger.info("[reload messages] size = %d", sendQueue.size());
                     }
                 } else {
                     MessageWrapper message = sendQueue.poll();
@@ -177,18 +192,60 @@ public class Broker extends Thread {
 
                     Map<String, Queue<Channel>> filterChannelMap = consumers.get(topic);
                     if (filterChannelMap != null) {
-                        Queue<Channel> channels = filterChannelMap.get(filter);
-                        if (channels != null) {
-                            Channel consumer = channels.poll();
-                            consumer.writeAndFlush(message);
-                            channels.add(consumer);
+                        if (filter == null) {
+                            deliverMessageToNullFiltered(message, filterChannelMap);
                         } else {
-                            Logger.error("[unknown filter] %s", filter);
+                            Queue<Channel> channels = filterChannelMap.get(filter);
+                            if (channels != null) {
+                                deliverMessage(message, channels);
+                            } else {
+                                deliverMessageToNullFiltered(message, filterChannelMap);
+                            }
                         }
                     } else {
                         Logger.error("[unknown topic] %s", topic);
                     }
                 }
+            }
+        }
+
+        private void deliverMessage(MessageWrapper message, Queue<Channel> channels) {
+            Channel consumer = channels.poll();
+            consumer.writeAndFlush(message);
+            channels.add(consumer);
+            Logger.info("[send message to] %s: %s", consumer, message);
+
+            BlockingQueue<ConsumeResult> result = new LinkedBlockingQueue<ConsumeResult>(1);
+            MessageId msgId = message.msgId();
+            sendResultMap.put(msgId, result);
+            ConsumeResult consumeResult = null;
+            try {
+                consumeResult = result.poll(Parameter.BROKER_TIME_OUT_SECOND, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {
+            }
+            if (consumeResult == null) {
+                storage.markFail(msgId.id());
+                Logger.info("[receive send result timeout] %s", msgId);
+            } else {
+                switch (consumeResult.getStatus()) {
+                    case SUCCESS:
+                        storage.markSuccess(msgId.id());
+                        break;
+                    case FAIL:
+                        storage.markFail(msgId.id());
+                        break;
+                    default:
+                        Logger.error("[unknown SendResult status] %s", consumeResult.getStatus());
+                }
+            }
+        }
+
+        private void deliverMessageToNullFiltered(MessageWrapper message, Map<String, Queue<Channel>> filterChannelMap) {
+            Queue<Channel> channels = filterChannelMap.get(NULL_FILTER);
+            if (channels != null) {
+                deliverMessage(message, channels);
+            } else {
+                Logger.error("[no user for null filter]");
             }
         }
     }

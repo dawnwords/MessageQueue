@@ -1,18 +1,20 @@
 package com.alibaba.middleware.race.mom;
 
+import com.alibaba.middleware.race.mom.bean.MessageId;
+
 public class ConsumeResult {
     private ConsumeStatus status;
-    private byte[] msgId;
+    private MessageId msgId;
     private String info;
 
-    public static ConsumeResult success(byte[] msgId) {
+    public static ConsumeResult success(MessageId msgId) {
         ConsumeResult result = new ConsumeResult();
         result.status = ConsumeStatus.SUCCESS;
         result.msgId = msgId;
         return result;
     }
 
-    public static ConsumeResult fail(byte[] msgId, String info) {
+    public static ConsumeResult fail(MessageId msgId, String info) {
         ConsumeResult result = new ConsumeResult();
         result.status = ConsumeStatus.FAIL;
         result.msgId = msgId;
@@ -36,7 +38,12 @@ public class ConsumeResult {
         this.info = info;
     }
 
-    public byte[] msgId() {
+    public MessageId msgId() {
         return msgId;
+    }
+
+    public ConsumeResult msgId(MessageId msgId) {
+        this.msgId = msgId;
+        return this;
     }
 }
