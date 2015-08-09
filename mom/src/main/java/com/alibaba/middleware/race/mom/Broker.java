@@ -101,7 +101,6 @@ public class Broker {
 
         @Override
         public void channelRead(final ChannelHandlerContext ctx, Object msg) {
-            Logger.info("[channel read] %s", msg);
             if (msg instanceof List) {
                 for (Object o : (List) msg) {
                     ctx.channel().eventLoop().submit(new RequestWorker(ctx, (SerializeWrapper) o));

@@ -4,22 +4,24 @@ import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Created by Dawnwords on 2015/8/9.
  */
 public class MessageId implements Serializable {
+    private static AtomicLong ID_GEN = new AtomicLong(System.currentTimeMillis());
     private byte[] id;
 
     public MessageId(byte[] id) {
         this.id = id;
     }
 
-    public MessageId(InetSocketAddress address, long bornTime) {
+    public MessageId(InetSocketAddress address) {
         ByteBuffer bytes = ByteBuffer.allocate(16);
         bytes.put(address.getAddress().getAddress());
         bytes.putInt(address.getPort());
-        bytes.putLong(bornTime);
+        bytes.putLong(ID_GEN.incrementAndGet());
         this.id = bytes.array();
     }
 
