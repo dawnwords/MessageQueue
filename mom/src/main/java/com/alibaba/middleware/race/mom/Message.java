@@ -1,6 +1,6 @@
 package com.alibaba.middleware.race.mom;
 
-import com.alibaba.middleware.race.mom.util.ByteUtil;
+import com.alibaba.middleware.race.mom.bean.MessageId;
 
 import java.io.Serializable;
 import java.net.InetSocketAddress;
@@ -11,21 +11,21 @@ import java.util.Map;
 public class Message implements Serializable {
     private String topic;
     private byte[] body;
-    private byte[] msgId;   //全局唯一的消息id，不同消息不能重复
+    private MessageId msgId;   //全局唯一的消息id，不同消息不能重复
     private long bornTime;
     private Map<String, String> properties = new HashMap<String, String>();
 
     public String getMsgId() {
-        return ByteUtil.messageId2String(msgId);
-    }
-
-    public void setMsgId(byte[] msgId) {
-        this.msgId = msgId;
+        return msgId.toString();
     }
 
     public void setMsgId(InetSocketAddress address) {
         this.bornTime = System.nanoTime();//TODO milli possible?
-        this.msgId = ByteUtil.createMessageId(address, bornTime);
+        this.msgId = new MessageId(address, bornTime);
+    }
+
+    public void setMsgId(MessageId msgId) {
+        this.msgId = msgId;
     }
 
     public String getTopic() {
@@ -91,7 +91,7 @@ public class Message implements Serializable {
     }
 
 
-    public byte[] getMsgIdAsByte() {
+    public MessageId getMessageId() {
         return msgId;
     }
 }

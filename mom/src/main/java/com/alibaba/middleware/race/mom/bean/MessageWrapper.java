@@ -3,7 +3,6 @@ package com.alibaba.middleware.race.mom.bean;
 import com.alibaba.middleware.race.mom.Message;
 import com.alibaba.middleware.race.mom.store.MessageState;
 import com.alibaba.middleware.race.mom.store.Storable;
-import com.alibaba.middleware.race.mom.util.ByteUtil;
 import io.netty.buffer.ByteBuf;
 
 import java.nio.ByteBuffer;
@@ -23,29 +22,29 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
     @Override
     public Message deserialize() {
         Message result = new Message();
-        result.setTopic(ByteUtil.toString(topic));
+        result.setTopic(Bytes.toString(topic));
         result.setBody(body);
-        result.setMsgId(msgId);
+        result.setMsgId(new MessageId(msgId));
         result.setBornTime(bornTime);
         for (int i = 0; i < propKeys.length; i++) {
-            result.setProperty(ByteUtil.toString(propKeys[i]), ByteUtil.toString(propVals[i]));
+            result.setProperty(Bytes.toString(propKeys[i]), Bytes.toString(propVals[i]));
         }
         return result;
     }
 
     @Override
     public MessageWrapper serialize(Message msg) {
-        this.topic = ByteUtil.toBytes(msg.getTopic());
+        this.topic = Bytes.toBytes(msg.getTopic());
         this.body = msg.getBody();
-        this.msgId = msg.getMsgIdAsByte();
+        this.msgId = msg.getMessageId().id();
         this.bornTime = msg.getBornTime();
         Map<String, String> properties = msg.getProperties();
         this.propKeys = new byte[properties.size()][];
         this.propVals = new byte[properties.size()][];
         int i = 0;
         for (String key : properties.keySet()) {
-            propKeys[i] = ByteUtil.toBytes(key);
-            propVals[i] = ByteUtil.toBytes(properties.get(key));
+            propKeys[i] = Bytes.toBytes(key);
+            propVals[i] = Bytes.toBytes(properties.get(key));
             i++;
         }
         return this;
@@ -133,30 +132,30 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
     @Override
     public String toString() {
         return "MessageWrapper{" +
-                "msgId=" + ByteUtil.messageId2String(msgId) +
+                "msgId=" + new MessageId(msgId) +
                 '}';
     }
 
-    public byte[] msgId() {
-        return msgId;
+    public MessageId msgId() {
+        return new MessageId(msgId);
     }
 
     public String topic() {
-        return ByteUtil.toString(topic);
+        return Bytes.toString(topic);
     }
 
     public String filter() {
         int i = 0;
         StringBuilder builder = new StringBuilder();
-        builder.append(ByteUtil.toString(propKeys[i]));
+        builder.append(Bytes.toString(propKeys[i]));
         builder.append("=");
-        builder.append(ByteUtil.toString(propVals[i]));
+        builder.append(Bytes.toString(propVals[i]));
         i++;
         for (; i < propKeys.length; i++) {
             builder.append(";");
-            builder.append(ByteUtil.toString(propKeys[i]));
+            builder.append(Bytes.toString(propKeys[i]));
             builder.append("=");
-            builder.append(ByteUtil.toString(propVals[i]));
+            builder.append(Bytes.toString(propVals[i]));
         }
         return builder.toString();
     }
