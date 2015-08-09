@@ -15,8 +15,8 @@ public interface Storage {
      *  +----------------------------------------------+
      *  |    ip    |    port   |        born time      |
      *  +----------------------------------------------+
-     *  |   state  |   length  |                       |
-     *  +----------------------+                       |
+     *  |   length |   offset  |   state   |           |
+     *  +----------------------------------+           |
      *  |                   content                    |
      *  +----------------------------------------------+
      *
@@ -25,10 +25,11 @@ public interface Storage {
     /**
      * Insert a storageUnit that has already been built
      *
-     * @param storageUnit byte array of storageUnit
-     * @return true if the operation success, false otherwise
+     * @param header ip + port + born time + length + offset + <tt>MessageStatus.FAIL</tt>
+     * @param body content
+     * @return true if operation success, false otherwise
      */
-    boolean insert(byte[] storageUnit);
+    boolean insert(byte[] header, byte[]body );
 
     /**
      * Mark the state for the message with given id as <tt>MessageStatus.SUCCESS</tt>

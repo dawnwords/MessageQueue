@@ -16,7 +16,7 @@ public class DummyStorage implements Storage {
     private ConcurrentHashMap<MessageId, MessageAndState> storage = new ConcurrentHashMap<MessageId, MessageAndState>();
 
     @Override
-    public boolean insert(byte[] content) {
+    public boolean insert(byte[] header, byte[] content) {
         MessageId msgId = msgId(content);
         Logger.info("[storage insert] id:%s", msgId);
         storage.put(msgId, new MessageAndState(content, MessageState.FAIL));
