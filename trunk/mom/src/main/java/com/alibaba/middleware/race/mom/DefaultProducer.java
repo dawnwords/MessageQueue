@@ -64,6 +64,7 @@ public class DefaultProducer extends DefaultClient implements Producer {
     public SendResult sendMessage(Message message) {
         message.setTopic(topic);
         message.setMsgId((InetSocketAddress) channel.localAddress());
+        message.setBornTime(System.currentTimeMillis());
         final ArrayBlockingQueue<SendResult> resultHolder = new ArrayBlockingQueue<SendResult>(1);
         final MessageId messageId = message.getMessageId();
         sendResultMap.put(messageId, resultHolder);

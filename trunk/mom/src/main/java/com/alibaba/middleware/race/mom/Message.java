@@ -20,8 +20,7 @@ public class Message implements Serializable {
     }
 
     public void setMsgId(InetSocketAddress address) {
-        this.bornTime = System.currentTimeMillis();
-        this.msgId = new MessageId(address, bornTime);
+        this.msgId = new MessageId(address);
     }
 
     public void setMsgId(MessageId msgId) {
