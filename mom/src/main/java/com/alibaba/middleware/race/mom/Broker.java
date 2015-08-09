@@ -137,7 +137,7 @@ public class Broker {
                 Logger.info("[normal message]");
                 MessageWrapper message = (MessageWrapper) wrapper;
                 SendResult result;
-                if (storage.insert(message.toStorage())) {
+                if (storage.insert(message.msgId().id(), message.toStorage())) {
                     result = SendResult.success(message.msgId());
                     sendQueue.offer(message);
                 } else {
