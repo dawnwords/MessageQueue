@@ -1,6 +1,7 @@
 package com.alibaba.middleware.race.mom.store;
 
 import com.alibaba.middleware.race.mom.bean.MessageId;
+import com.alibaba.middleware.race.mom.util.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
@@ -16,22 +17,25 @@ public class DummyStorage implements Storage {
 
     @Override
     public boolean insert(byte[] content) {
-        ByteBuffer b = ByteBuffer.wrap(content);
-        byte[] msgId = new byte[16];
-        b.get(msgId);
-        storage.put(new MessageId(msgId), new MessageAndState(content, MessageState.FAIL));
+        MessageId msgId = msgId(content);
+        Logger.info("[storage insert] id:%s", msgId);
+        storage.put(msgId, new MessageAndState(content, MessageState.FAIL));
         return true;
     }
 
     @Override
     public boolean markSuccess(byte[] id) {
-        storage.remove(new MessageId(id));
+        MessageId msgId = new MessageId(id);
+        Logger.info("[mark success] id %s", msgId);
+        storage.remove(msgId);
         return true;
     }
 
     @Override
     public boolean markFail(byte[] id) {
-        MessageAndState state = storage.get(new MessageId(id));
+        MessageId msgId = new MessageId(id);
+        Logger.info("[mark fail] id %s", msgId);
+        MessageAndState state = storage.get(msgId);
         if (state == null) return false;
         state.state = MessageState.FAIL;
         return true;
@@ -46,7 +50,15 @@ public class DummyStorage implements Storage {
                 result.add(state.content);
             }
         }
+        Logger.info("[fail list] %s", result);
         return result;
+    }
+
+    private MessageId msgId(byte[] content) {
+        ByteBuffer b = ByteBuffer.wrap(content);
+        byte[] msgId = new byte[16];
+        b.get(msgId);
+        return new MessageId(msgId);
     }
 
     private class MessageAndState {
@@ -56,6 +68,13 @@ public class DummyStorage implements Storage {
         public MessageAndState(byte[] content, MessageState state) {
             this.content = content;
             this.state = state;
+        }
+
+        @Override
+        public String toString() {
+            return "MessageAndState{" +
+                    "state=" + state +
+                    ", id=" + msgId(content) + '}';
         }
     }
 }

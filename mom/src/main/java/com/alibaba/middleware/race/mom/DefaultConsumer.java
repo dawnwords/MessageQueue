@@ -1,6 +1,7 @@
 package com.alibaba.middleware.race.mom;
 
 
+import com.alibaba.middleware.race.mom.bean.ConsumeResultWrapper;
 import com.alibaba.middleware.race.mom.bean.RegisterMessage;
 import com.alibaba.middleware.race.mom.bean.RegisterMessageWrapper;
 import com.alibaba.middleware.race.mom.util.Logger;
@@ -14,7 +15,8 @@ public class DefaultConsumer extends DefaultClient implements Consumer {
     protected void handleMessage(ChannelHandlerContext ctx, Object o) {
         Message msg = (Message) o;
         Logger.info("[receive message] %s", msg);
-        listener.onMessage(msg);
+        ConsumeResult consumeResult = listener.onMessage(msg).msgId(msg.getMessageId());
+        ctx.writeAndFlush(new ConsumeResultWrapper().serialize(consumeResult));
     }
 
     @Override
