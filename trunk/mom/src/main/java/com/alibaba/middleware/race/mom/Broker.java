@@ -19,21 +19,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by Dawnwords on 2015/8/6.
  */
 public class Broker {
     private static final String NULL_FILTER = "[]";
-    private DefaultEventExecutorGroup defaultEventExecutorGroup =
-            new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
-    private Queue<MessageWrapper> sendQueue = new LinkedBlockingQueue<MessageWrapper>();
-    private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers =
-            new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
-    private Map<MessageId, BlockingQueue<ConsumeResult>> sendResultMap =
-            new ConcurrentHashMap<MessageId, BlockingQueue<ConsumeResult>>();
+    private DefaultEventExecutorGroup defaultEventExecutorGroup;
+    private BlockingQueue<MessageWrapper> sendQueue;
+    private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers;
+    private Map<MessageId, BlockingQueue<ConsumeResult>> sendResultMap;
     private volatile boolean stop;
-    private Storage storage = Parameter.STORAGE;
+    private AtomicBoolean fetchFailList;
+    private Storage storage;
+
+    public Broker() {
+        defaultEventExecutorGroup = new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
+        sendQueue = new LinkedBlockingQueue<MessageWrapper>();
+        consumers = new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
+        sendResultMap = new ConcurrentHashMap<MessageId, BlockingQueue<ConsumeResult>>();
+        fetchFailList = new AtomicBoolean(false);
+        storage = Parameter.STORAGE;
+    }
 
     public static void main(String[] args) {
         new Broker().start();
@@ -168,75 +176,92 @@ public class Broker {
     }
 
     private class MessageWorker implements Runnable {
+
         @Override
         public void run() {
             while (!stop) {
                 boolean shouldLoad = sendQueue.size() <= 1;
-                if (shouldLoad) {
+                if (shouldLoad && fetchFailList.compareAndSet(false, true)) {
                     List<byte[]> failList = storage.failList();
-                    if (failList.size() == 0) {
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException ignored) {
-                        }
-                    } else {
+                    if (failList.size() > 0) {
                         for (byte[] message : failList) {
                             sendQueue.add(new MessageWrapper().fromStorage(message));
                         }
                         Logger.info("[reload messages] size = %d", sendQueue.size());
-                    }
-                } else {
-                    MessageWrapper message = sendQueue.poll();
-                    String topic = message.topic();
-                    String filter = message.filter();
-
-                    Map<String, Queue<Channel>> filterChannelMap = consumers.get(topic);
-                    if (filterChannelMap != null) {
-                        if (filter == null) {
-                            deliverMessageToNullFiltered(message, filterChannelMap);
-                        } else {
-                            Queue<Channel> channels = filterChannelMap.get(filter);
-                            if (channels != null) {
-                                deliverMessage(message, channels);
-                            } else {
-                                deliverMessageToNullFiltered(message, filterChannelMap);
-                            }
-                        }
                     } else {
-                        Logger.error("[unknown topic] %s", topic);
+                        try {
+                            Thread.sleep(Parameter.BROKER_MESSAGE_RELOAD_FREQUENCY);
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
+                    fetchFailList.set(false);
+                } else {
+                    try {
+                        MessageWrapper message = sendQueue.take();
+                        String topic = message.topic();
+                        String filter = message.filter();
+
+                        Map<String, Queue<Channel>> filterChannelMap = consumers.get(topic);
+                        if (filterChannelMap != null) {
+                            if (filter == null) {
+                                deliverMessageToNullFiltered(message, filterChannelMap);
+                            } else {
+                                Queue<Channel> channels = filterChannelMap.get(filter);
+                                if (channels != null) {
+                                    deliverMessage(message, channels);
+                                } else {
+                                    deliverMessageToNullFiltered(message, filterChannelMap);
+                                }
+                            }
+                        } else {
+                            storage.markFail(message.msgId().id());
+                            Logger.info("[no user for topic] %s", topic);
+                        }
+                    } catch (InterruptedException e) {
+                        Logger.error(e);
                     }
                 }
             }
         }
 
         private void deliverMessage(MessageWrapper message, Queue<Channel> channels) {
-            Channel consumer = channels.poll();
-            consumer.writeAndFlush(message);
-            channels.add(consumer);
-            Logger.info("[send message to] %s: %s", consumer, message);
-
-            BlockingQueue<ConsumeResult> result = new LinkedBlockingQueue<ConsumeResult>(1);
-            MessageId msgId = message.msgId();
-            sendResultMap.put(msgId, result);
-            ConsumeResult consumeResult = null;
-            try {
-                consumeResult = result.poll(Parameter.BROKER_TIME_OUT_SECOND, TimeUnit.SECONDS);
-            } catch (InterruptedException ignored) {
-            }
-            if (consumeResult == null) {
-                storage.markFail(msgId.id());
-                Logger.info("[receive send result timeout] %s", msgId);
-            } else {
-                switch (consumeResult.getStatus()) {
-                    case SUCCESS:
-                        storage.markSuccess(msgId.id());
-                        break;
-                    case FAIL:
-                        storage.markFail(msgId.id());
-                        break;
-                    default:
-                        Logger.error("[unknown SendResult status] %s", consumeResult.getStatus());
+            Channel consumer = null;
+            while (!channels.isEmpty()) {
+                consumer = channels.poll();
+                if (consumer.isActive()) {
+                    break;
                 }
+            }
+            if (consumer != null) {
+                consumer.writeAndFlush(message);
+                channels.add(consumer);
+                Logger.info("[send message to] %s: %s", consumer, message);
+
+                BlockingQueue<ConsumeResult> result = new LinkedBlockingQueue<ConsumeResult>(1);
+                MessageId msgId = message.msgId();
+                sendResultMap.put(msgId, result);
+                ConsumeResult consumeResult = null;
+                try {
+                    consumeResult = result.poll(Parameter.BROKER_TIME_OUT_SECOND, TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                }
+                if (consumeResult == null) {
+                    storage.markFail(msgId.id());
+                    Logger.info("[receive send result timeout] %s", msgId);
+                } else {
+                    switch (consumeResult.getStatus()) {
+                        case SUCCESS:
+                            storage.markSuccess(msgId.id());
+                            break;
+                        case FAIL:
+                            storage.markFail(msgId.id());
+                            break;
+                        default:
+                            Logger.error("[unknown SendResult status] %s", consumeResult.getStatus());
+                    }
+                }
+            } else {
+                Logger.error("[no user for current channel]");
             }
         }
 

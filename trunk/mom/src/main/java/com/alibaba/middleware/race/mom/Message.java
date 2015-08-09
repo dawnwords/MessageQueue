@@ -20,7 +20,7 @@ public class Message implements Serializable {
     }
 
     public void setMsgId(InetSocketAddress address) {
-        this.bornTime = System.nanoTime();//TODO milli possible?
+        this.bornTime = System.currentTimeMillis();
         this.msgId = new MessageId(address, bornTime);
     }
 
@@ -48,12 +48,6 @@ public class Message implements Serializable {
         return properties.get(key);
     }
 
-    /**
-     * 设置消息属性
-     *
-     * @param key
-     * @param value
-     */
     public void setProperty(String key, String value) {
         properties.put(key, value);
     }
@@ -62,11 +56,6 @@ public class Message implements Serializable {
         return properties;
     }
 
-    /**
-     * 删除消息属性
-     *
-     * @param key
-     */
     public void removeProperty(String key) {
         properties.remove(key);
     }
@@ -83,7 +72,6 @@ public class Message implements Serializable {
     public String toString() {
         return "Message{" +
                 "topic='" + topic + '\'' +
-                ", body=" + Arrays.toString(body) +
                 ", msgId='" + msgId + '\'' +
                 ", bornTime=" + bornTime +
                 ", properties=" + properties +

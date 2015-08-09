@@ -1,7 +1,6 @@
 package com.alibaba.middleware.race.mom.codec;
 
 import com.alibaba.middleware.race.mom.bean.*;
-import com.alibaba.middleware.race.mom.util.Logger;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -264,7 +263,6 @@ public class Decoder extends ChannelInboundHandlerAdapter {
                 default:
                     result = null;
             }
-            Logger.info("[decode result] %s", result);
             return result;
         } finally {
             frame.release();
