@@ -29,7 +29,7 @@ public class Broker {
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
     private BlockingQueue<MessageWrapper> sendQueue;
     private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers;
-    private Map<MessageId, BlockingQueue<ConsumeResult>> sendResultMap;
+    private Map<MessageId, BlockingQueue<ConsumeResult>> consumeResult;
     private volatile boolean stop;
     private AtomicBoolean fetchFailList;
     private Storage storage;
@@ -38,7 +38,7 @@ public class Broker {
         defaultEventExecutorGroup = new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
         sendQueue = new LinkedBlockingQueue<MessageWrapper>();
         consumers = new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
-        sendResultMap = new ConcurrentHashMap<MessageId, BlockingQueue<ConsumeResult>>();
+        consumeResult = new ConcurrentHashMap<MessageId, BlockingQueue<ConsumeResult>>();
         fetchFailList = new AtomicBoolean(false);
         storage = Parameter.STORAGE;
     }
@@ -164,7 +164,7 @@ public class Broker {
                 ConsumeResult result = ((ConsumeResultWrapper) wrapper).deserialize();
                 Logger.info("[consume result] %s", result);
                 MessageId msgId = result.msgId();
-                BlockingQueue<ConsumeResult> resultHolder = sendResultMap.get(msgId);
+                BlockingQueue<ConsumeResult> resultHolder = consumeResult.get(msgId);
                 if (resultHolder != null) {
                     resultHolder.offer(result);
                 } else {
@@ -238,7 +238,7 @@ public class Broker {
 
                 BlockingQueue<ConsumeResult> result = new LinkedBlockingQueue<ConsumeResult>(1);
                 MessageId msgId = message.msgId();
-                sendResultMap.put(msgId, result);
+                consumeResult.put(msgId, result);
                 ConsumeResult consumeResult = null;
                 try {
                     consumeResult = result.poll(Parameter.BROKER_TIME_OUT_SECOND, TimeUnit.SECONDS);
