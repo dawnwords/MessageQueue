@@ -168,7 +168,7 @@ public class Broker {
                 if (resultHolder != null) {
                     resultHolder.offer(result);
                 } else {
-                    Logger.error("[unknown send result id] %s", msgId);
+                    Logger.error("[unknown ConsumeResult id] %s", msgId);
                 }
             }
         }
@@ -227,7 +227,7 @@ public class Broker {
             Channel consumer = null;
             while (!channels.isEmpty()) {
                 consumer = channels.poll();
-                if (consumer.isActive()) {
+                if (consumer.isOpen()) {
                     break;
                 }
             }
@@ -246,7 +246,7 @@ public class Broker {
                 }
                 if (consumeResult == null) {
                     storage.markFail(msgId.id());
-                    Logger.info("[receive send result timeout] %s", msgId);
+                    Logger.info("[receive ConsumeResult timeout] %s", msgId);
                 } else {
                     switch (consumeResult.getStatus()) {
                         case SUCCESS:
@@ -256,7 +256,7 @@ public class Broker {
                             storage.markFail(msgId.id());
                             break;
                         default:
-                            Logger.error("[unknown SendResult status] %s", consumeResult.getStatus());
+                            Logger.error("[unknown ConsumeResult status] %s", consumeResult.getStatus());
                     }
                 }
             } else {
