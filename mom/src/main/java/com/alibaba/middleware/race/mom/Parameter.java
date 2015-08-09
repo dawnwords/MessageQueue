@@ -26,4 +26,5 @@ public class Parameter {
 
     public static final int PRODUCER_TIME_OUT_SECOND = 10;
     public static final int BROKER_TIME_OUT_SECOND = 10;
+    public static final int BROKER_MESSAGE_RELOAD_FREQUENCY = 1000;
 }
