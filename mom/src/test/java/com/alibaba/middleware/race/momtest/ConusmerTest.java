@@ -10,21 +10,21 @@ import com.alibaba.middleware.race.mom.MessageListener;
 public class ConusmerTest {
 	public static void main(String[] args) {
 		Consumer consumer = new DefaultConsumer();
-		//ÉèÖÃÏû·ÑÕßid£¬groupidÏàÍ¬µÄÏû·ÑÕß£¬broker»áÊÓÎªÍ¬Ò»¸öÏû·ÑÕß¼¯Èº£¬Ã¿ÌõÏûÏ¢Ö»»áÍ¶µİ¸ø¼¯ÈºÖĞµÄÒ»Ì¨»úÆ÷
+		//è®¾ç½®æ¶ˆè´¹è€…idï¼Œgroupidç›¸åŒçš„æ¶ˆè´¹è€…ï¼Œbrokerä¼šè§†ä¸ºåŒä¸€ä¸ªæ¶ˆè´¹è€…é›†ç¾¤ï¼Œæ¯æ¡æ¶ˆæ¯åªä¼šæŠ•é€’ç»™é›†ç¾¤ä¸­çš„ä¸€å°æœºå™¨
 		consumer.setGroupId("CG-test");
-		//·¢Æğ¶©ÔÄ²Ù×÷£¬brokerÖ»ÄÜÍ¶µİ topicÎªT-test£¬²¢ÇÒareaÊôĞÔÎªusµÄÏûÏ¢¸øÏû·ÑÕß
-		consumer.subscribe("T-test", "area=us"/*Èç¹û¸ÄÊôĞÔÎªnull»òÕß¿Õ´®£¬ÄÇÃ´±íÊ¾½ÓÊÕÕâ¸ötopicÏÂµÄËùÓĞÏûÏ¢*/, new MessageListener() {
+		//å‘èµ·è®¢é˜…æ“ä½œï¼Œbrokeråªèƒ½æŠ•é€’ topicä¸ºT-testï¼Œå¹¶ä¸”areaå±æ€§ä¸ºusçš„æ¶ˆæ¯ç»™æ¶ˆè´¹è€…
+		consumer.subscribe("T-test", "area=us"/*å¦‚æœæ”¹å±æ€§ä¸ºnullæˆ–è€…ç©ºä¸²ï¼Œé‚£ä¹ˆè¡¨ç¤ºæ¥æ”¶è¿™ä¸ªtopicä¸‹çš„æ‰€æœ‰æ¶ˆæ¯*/, new MessageListener() {
 
 			@Override
 			public ConsumeResult onMessage(Message message) {
 				assert "T-test".equals(message.getTopic()) && "us".equals(message.getProperty("area"));
 				System.out.println("consume success:" + message.getMsgId());
 				ConsumeResult result = new ConsumeResult();
-				//ÉèÖÃÏû·Ñ½á¹û£¬Èç¹û³É¹¦£¬ÄÇÃ´broker²»ÔÙÍ¶µİ
+				//è®¾ç½®æ¶ˆè´¹ç»“æœï¼Œå¦‚æœæˆåŠŸï¼Œé‚£ä¹ˆbrokerä¸å†æŠ•é€’
 				result.setStatus(ConsumeStatus.SUCCESS);
-				//Èç¹ûÉèÖÃÎªÊ§°Ü£¬ÄÇÃ´broker»á¾¡¿ìÖØÊÔÍ¶µİ£¬Ö±ÖÁ·µ»Ø³É¹¦¡£
+				//å¦‚æœè®¾ç½®ä¸ºå¤±è´¥ï¼Œé‚£ä¹ˆbrokerä¼šå°½å¿«é‡è¯•æŠ•é€’ï¼Œç›´è‡³è¿”å›æˆåŠŸã€‚
 				//result.setStatus(ConsumeStatus.FAIL);
-				//Ïû·ÑÊ§°ÜÒªÉèÖÃÊ§°ÜÔ­Òò£¬broker¿ÉÒÔ»ñÈ¡µ½Õâ¸öĞÅÏ¢
+				//æ¶ˆè´¹å¤±è´¥è¦è®¾ç½®å¤±è´¥åŸå› ï¼Œbrokerå¯ä»¥è·å–åˆ°è¿™ä¸ªä¿¡æ¯
 				//result.setInfo("fail detail or reason");
 				return result;
 			}
