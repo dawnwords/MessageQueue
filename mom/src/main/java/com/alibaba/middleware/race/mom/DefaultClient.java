@@ -12,6 +12,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -84,7 +85,11 @@ public abstract class DefaultClient {
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-            Logger.error(cause);
+            if (cause instanceof IOException) {
+                Logger.info("[server disconnected]");
+            } else {
+                Logger.error(cause);
+            }
         }
     }
 }
