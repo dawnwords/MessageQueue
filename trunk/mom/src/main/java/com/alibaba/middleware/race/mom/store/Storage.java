@@ -22,6 +22,10 @@ public interface Storage {
      *
      */
 
+    void start();
+
+    void stop();
+
     /**
      * Insert a storageUnit that has already been built
      *
