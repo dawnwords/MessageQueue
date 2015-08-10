@@ -1,26 +1,12 @@
 package com.alibaba.middleware.race.mom.store;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
  * Created by Dawnwords on 2015/8/7.
  */
 public interface Storage {
-
-    /**
-     *
-     *                  Storage Unit
-     *
-     *   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
-     *  +----------------------------------------------+
-     *  |    ip    |    port   |        born time      |
-     *  +----------------------------------------------+
-     *  |   length |          offset       |   state   |
-     *  +----------------------------------------------+
-     *  |                   content                    |
-     *  +----------------------------------------------+
-     *
-     */
 
     void start();
 
@@ -29,11 +15,12 @@ public interface Storage {
     /**
      * Insert a storageUnit that has already been built
      *
-     * @param header ip + port + born time + length + offset + <tt>MessageStatus.FAIL</tt>
-     * @param body content
+     * @param unit ip + port + born time + length
+     *             + offset + <tt>MessageStatus.FAIL</tt>
+     *             + content
      * @return true if operation success, false otherwise
      */
-    boolean insert(byte[] header, byte[]body );
+    boolean insert(StorageUnit unit);
 
     /**
      * Mark the state for the message with given id as <tt>MessageStatus.SUCCESS</tt>
@@ -58,6 +45,6 @@ public interface Storage {
      *
      * @return those selected messages
      */
-    List<byte[]/* content */> failList();
+    List<StorageUnit/* content */> failList();
 
 }

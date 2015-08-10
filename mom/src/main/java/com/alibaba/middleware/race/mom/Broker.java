@@ -4,6 +4,7 @@ import com.alibaba.middleware.race.mom.bean.*;
 import com.alibaba.middleware.race.mom.codec.Decoder;
 import com.alibaba.middleware.race.mom.codec.Encoder;
 import com.alibaba.middleware.race.mom.store.Storage;
+import com.alibaba.middleware.race.mom.store.StorageUnit;
 import com.alibaba.middleware.race.mom.util.Logger;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -158,7 +159,7 @@ public class Broker {
                 Logger.info("[normal message]");
                 MessageWrapper message = (MessageWrapper) wrapper;
                 SendResult result;
-                if (storage.insert(message.msgId().id(), message.toStorage())) {
+                if (storage.insert(message.toStorage())) {
                     result = SendResult.success(message.msgId());
                     sendQueue.offer(message);
                 } else {
@@ -214,9 +215,9 @@ public class Broker {
             while (!stop) {
                 boolean shouldLoad = sendQueue.size() <= 1;
                 if (shouldLoad && fetchFailList.compareAndSet(false, true)) {
-                    List<byte[]> failList = storage.failList();
+                    List<StorageUnit> failList = storage.failList();
                     if (failList.size() > 0) {
-                        for (byte[] message : failList) {
+                        for (StorageUnit message : failList) {
                             sendQueue.add(new MessageWrapper().fromStorage(message));
                         }
                         Logger.info("[reload messages] size = %d", sendQueue.size());

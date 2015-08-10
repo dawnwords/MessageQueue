@@ -3,6 +3,7 @@ package com.alibaba.middleware.race.mom.bean;
 import com.alibaba.middleware.race.mom.Message;
 import com.alibaba.middleware.race.mom.store.MessageState;
 import com.alibaba.middleware.race.mom.store.Storable;
+import com.alibaba.middleware.race.mom.store.StorageUnit;
 import io.netty.buffer.ByteBuf;
 
 import java.nio.ByteBuffer;
@@ -65,7 +66,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
     public MessageWrapper decode(ByteBuf in) {
         this.topic = Decoder.decode(in);
         this.body = Decoder.decode(in);
-        this.msgId = new byte[16];
+        this.msgId = new byte[MessageId.LENGTH];
         in.readBytes(msgId);
         this.bornTime = in.readLong();
         this.propKeys = Decoder.decodeArray(in);
@@ -74,49 +75,58 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
     }
 
     @Override
-    public byte[] toStorage() {
-        int totalLen = 0;
-        totalLen += 4 + topic.length;
-        totalLen += 4 + body.length;
-        totalLen += 4;      // propKey.size
+    public StorageUnit toStorage() {
+        ByteBuffer header = ByteBuffer.allocate(StorageUnit.HEADER_LENGTH);
+        int bodyLength = bodyLength();
+        ByteBuffer body = ByteBuffer.allocate(bodyLength);
+        header.put(msgId);
+        header.putInt(bodyLength);
+        header.putLong(0);
+        header.putInt(MessageState.FAIL.ordinal());
+        put(body, topic);
+        put(body, this.body);
+        body.putInt(propKeys.length);
         for (int i = 0; i < propKeys.length; i++) {
-            totalLen += 4 + propKeys[i].length;
-            totalLen += 4 + propVals[i].length;
+            put(body, propKeys[i]);
+            put(body, propVals[i]);
         }
-        ByteBuffer result = ByteBuffer.allocate(totalLen + 32 /* id(16) + length(4) + offset(8) + status(4) */);
-        result.put(msgId);
-        result.putInt(totalLen);
-        result.putLong(0);
-        result.putInt(MessageState.FAIL.ordinal());
-        put(result, topic);
-        put(result, body);
-        result.putInt(propKeys.length);
+        header.flip();
+        body.flip();
+        return new StorageUnit().header(header).body(body);
+    }
+
+    private int bodyLength() {
+        int bodyLength = 0;
+        bodyLength += 4 + topic.length;
+        bodyLength += 4 + body.length;
+        bodyLength += 4;      // propKey.size
         for (int i = 0; i < propKeys.length; i++) {
-            put(result, propKeys[i]);
-            put(result, propVals[i]);
+            bodyLength += 4 + propKeys[i].length;
+            bodyLength += 4 + propVals[i].length;
         }
-        return result.array();
+        return bodyLength;
     }
 
     @Override
-    public MessageWrapper fromStorage(byte[] bytes) {
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-        this.msgId = new byte[16];
-        buffer.get(msgId);
-        buffer.getInt();        //ignore length
-        buffer.getLong();       //ignore offset
-        buffer.getInt();        //ignore status
+    public MessageWrapper fromStorage(StorageUnit unit) {
+        ByteBuffer body = unit.body();
+        ByteBuffer header = unit.header();
+        this.msgId = new byte[MessageId.LENGTH];
+        header.get(msgId);
+        header.getInt();        //ignore length
+        header.getLong();       //ignore offset
+        header.getInt();        //ignore status
         ByteBuffer timeBuffer = ByteBuffer.wrap(msgId);
         timeBuffer.getLong();   //ignore ip & port
         this.bornTime = timeBuffer.getLong();
-        this.topic = get(buffer);
-        this.body = get(buffer);
-        int propertiesLen = buffer.getInt();
+        this.topic = get(body);
+        this.body = get(body);
+        int propertiesLen = body.getInt();
         this.propKeys = new byte[propertiesLen][];
         this.propVals = new byte[propertiesLen][];
         for (int i = 0; i < propertiesLen; i++) {
-            this.propKeys[i] = get(buffer);
-            this.propVals[i] = get(buffer);
+            this.propKeys[i] = get(body);
+            this.propVals[i] = get(body);
         }
         return this;
     }
