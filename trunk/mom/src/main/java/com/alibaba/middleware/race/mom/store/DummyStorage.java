@@ -3,7 +3,6 @@ package com.alibaba.middleware.race.mom.store;
 import com.alibaba.middleware.race.mom.bean.MessageId;
 import com.alibaba.middleware.race.mom.util.Logger;
 
-import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,19 +16,17 @@ public class DummyStorage implements Storage {
 
     @Override
     public void start() {
-
     }
 
     @Override
     public void stop() {
-
     }
 
     @Override
-    public boolean insert(byte[] header, byte[] content) {
-        MessageId msgId = msgId(content);
+    public boolean insert(StorageUnit unit) {
+        MessageId msgId = unit.msgId();
         Logger.info("[storage insert] id:%s", msgId);
-        storage.put(msgId, new MessageAndState(content, MessageState.FAIL));
+        storage.put(msgId, new MessageAndState(unit, MessageState.FAIL));
         return true;
     }
 
@@ -52,31 +49,24 @@ public class DummyStorage implements Storage {
     }
 
     @Override
-    public List<byte[]> failList() {
-        List<byte[]> result = new LinkedList<byte[]>();
+    public List<StorageUnit> failList() {
+        List<StorageUnit> result = new LinkedList<StorageUnit>();
         for (MessageAndState state : storage.values()) {
             if (state.state == MessageState.FAIL) {
                 state.state = MessageState.RESEND;
-                result.add(state.content);
+                result.add(state.unit);
             }
         }
         Logger.info("[fail list] %s", result);
         return result;
     }
 
-    private MessageId msgId(byte[] content) {
-        ByteBuffer b = ByteBuffer.wrap(content);
-        byte[] msgId = new byte[16];
-        b.get(msgId);
-        return new MessageId(msgId);
-    }
-
     private class MessageAndState {
-        private byte[] content;
+        private StorageUnit unit;
         private MessageState state;
 
-        public MessageAndState(byte[] content, MessageState state) {
-            this.content = content;
+        public MessageAndState(StorageUnit unit, MessageState state) {
+            this.unit = unit;
             this.state = state;
         }
 
@@ -84,7 +74,7 @@ public class DummyStorage implements Storage {
         public String toString() {
             return "MessageAndState{" +
                     "state=" + state +
-                    ", id=" + msgId(content) + '}';
+                    ", id=" + unit.msgId() + '}';
         }
     }
 }

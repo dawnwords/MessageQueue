@@ -39,7 +39,7 @@ public class ConsumeResultWrapper implements SerializeWrapper<ConsumeResult> {
     @Override
     public ConsumeResultWrapper decode(ByteBuf in) {
         status = in.readByte();
-        msgId = new byte[16];
+        msgId = new byte[MessageId.LENGTH];
         in.readBytes(msgId);
         info = Decoder.decode(in);
         return this;
