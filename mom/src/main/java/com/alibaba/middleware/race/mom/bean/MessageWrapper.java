@@ -145,6 +145,9 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
     }
 
     public String filter() {
+        if (propKeys == null || propKeys.length == 0) {
+            return null;
+        }
         int i = 0;
         StringBuilder builder = new StringBuilder();
         builder.append(Bytes.toString(propKeys[i]));

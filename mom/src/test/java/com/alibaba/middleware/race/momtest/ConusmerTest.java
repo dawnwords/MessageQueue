@@ -19,12 +19,6 @@ public class ConusmerTest {
 			public ConsumeResult onMessage(Message message) {
 				assert "T-test".equals(message.getTopic()) && "us".equals(message.getProperty("area"));
 				System.out.println("consume success:" + message.getMsgId());
-
-				try {
-					Thread.sleep(11000);
-				} catch (InterruptedException ignored) {
-				}
-
 				ConsumeResult result = new ConsumeResult();
 				//设置消费结果，如果成功，那么broker不再投递
 				result.setStatus(ConsumeStatus.SUCCESS);
