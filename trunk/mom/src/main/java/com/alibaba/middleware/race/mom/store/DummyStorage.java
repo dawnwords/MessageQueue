@@ -31,16 +31,14 @@ public class DummyStorage implements Storage {
     }
 
     @Override
-    public boolean markSuccess(byte[] id) {
-        MessageId msgId = new MessageId(id);
+    public boolean markSuccess(MessageId msgId) {
         Logger.info("[mark success] id %s", msgId);
         storage.remove(msgId);
         return true;
     }
 
     @Override
-    public boolean markFail(byte[] id) {
-        MessageId msgId = new MessageId(id);
+    public boolean markFail(MessageId msgId) {
         Logger.info("[mark fail] id %s", msgId);
         MessageAndState state = storage.get(msgId);
         if (state == null) return false;
