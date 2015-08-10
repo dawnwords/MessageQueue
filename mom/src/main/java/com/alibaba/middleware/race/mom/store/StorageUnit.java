@@ -44,7 +44,8 @@ public class StorageUnit {
     public MessageId msgId() {
         byte[] msgIdBytes = new byte[MessageId.LENGTH];
         header.get(msgIdBytes);
-        header.flip();
+        header.limit(HEADER_LENGTH);
+        header.position(0);
         return new MessageId(msgIdBytes);
     }
 }

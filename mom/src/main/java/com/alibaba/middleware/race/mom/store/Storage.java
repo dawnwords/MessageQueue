@@ -1,6 +1,7 @@
 package com.alibaba.middleware.race.mom.store;
 
-import java.nio.ByteBuffer;
+import com.alibaba.middleware.race.mom.bean.MessageId;
+
 import java.util.List;
 
 /**
@@ -28,7 +29,7 @@ public interface Storage {
      * @param id id of the message to be marked
      * @return true if the operation succeed, false otherwise
      */
-    boolean markSuccess(byte[] id);
+    boolean markSuccess(MessageId id);
 
     /**
      * Mark the state for the message with given id as <tt>MessageStatus.FAIL</tt>
@@ -36,7 +37,7 @@ public interface Storage {
      * @param id id of the message to be marked
      * @return true if the operation succeed, false otherwise
      */
-    boolean markFail(byte[] id);
+    boolean markFail(MessageId id);
 
     /**
      * Get at most <tt>Parameter.PRODUCER_TIME_OUT_SECOND</tt> messages with the

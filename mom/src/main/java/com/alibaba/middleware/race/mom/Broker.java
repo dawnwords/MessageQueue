@@ -193,10 +193,10 @@ public class Broker {
                 if (consumeResult.remove(msgId) != null) {
                     switch (result.getStatus()) {
                         case SUCCESS:
-                            storage.markSuccess(msgId.id());
+                            storage.markSuccess(msgId);
                             break;
                         case FAIL:
-                            storage.markFail(msgId.id());
+                            storage.markFail(msgId);
                             break;
                         default:
                             Logger.error("[unknown ConsumeResult status] %s", result.getStatus());
@@ -247,7 +247,7 @@ public class Broker {
                                 }
                             }
                         } else {
-                            storage.markFail(message.msgId().id());
+                            storage.markFail(message.msgId());
                             Logger.info("[no user for topic] %s", topic);
                         }
                     } catch (InterruptedException e) {
@@ -288,7 +288,7 @@ public class Broker {
                 for (MessageId id : consumeResult.keySet()) {
                     if (current - consumeResult.get(id) > Parameter.BROKER_TIME_OUT) {
                         consumeResult.remove(id);
-                        storage.markFail(id.id());
+                        storage.markFail(id);
                         Logger.error("[ConsumeResult timeout] %s", id);
                     }
                 }
