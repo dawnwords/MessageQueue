@@ -29,7 +29,7 @@ public class Broker {
     private static final String NULL_FILTER = "[]";
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
     private BlockingQueue<MessageWrapper> sendQueue;
-    private Map<String/* groupId */, Map<String/* filter */, Queue<ConsumerHolder>>> consumers;
+    private Map<String/* groupId */, Map<String/* filter */, BlockingQueue<ConsumerHolder>>> consumers;
     private Map<ConsumerHolder, TopicFilter> consumerIndex;
     private Map<MessageId, Long/* create time */> consumeResult;
     private volatile boolean stop;
@@ -39,7 +39,7 @@ public class Broker {
     public Broker() {
         defaultEventExecutorGroup = new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
         sendQueue = new LinkedBlockingQueue<MessageWrapper>();
-        consumers = new ConcurrentHashMap<String, Map<String, Queue<ConsumerHolder>>>();
+        consumers = new ConcurrentHashMap<String, Map<String, BlockingQueue<ConsumerHolder>>>();
         consumerIndex = new ConcurrentHashMap<ConsumerHolder, TopicFilter>();
         consumeResult = new ConcurrentHashMap<MessageId, Long>();
         fetchFailList = new AtomicBoolean(false);
@@ -77,10 +77,12 @@ public class Broker {
                                 workerGroup.shutdownGracefully();
                                 bossGroup.shutdownGracefully();
                                 defaultEventExecutorGroup.shutdownGracefully();
+                                storage.stop();
                             }
                         });
                     }
                 });
+        storage.start();
         ExecutorService threadPool = Executors.newCachedThreadPool();
         threadPool.submit(new TimeoutWorker());
         for (int i = 0; i < Parameter.SERVER_EXECUTOR_THREADS; i++) {
@@ -120,7 +122,7 @@ public class Broker {
                 ConsumerHolder key = new ConsumerHolder(ctx.channel());
                 TopicFilter topicFilter = consumerIndex.get(key);
                 if (topicFilter != null) {
-                    Map<String, Queue<ConsumerHolder>> filterConsumerMap = consumers.get(topicFilter.topic);
+                    Map<String, BlockingQueue<ConsumerHolder>> filterConsumerMap = consumers.get(topicFilter.topic);
                     if (filterConsumerMap != null) {
                         Queue<ConsumerHolder> consumers = filterConsumerMap.get(topicFilter.filter);
                         if (consumers != null) {
@@ -168,16 +170,16 @@ public class Broker {
                 RegisterMessage register = ((RegisterMessageWrapper) wrapper).deserialize();
                 Logger.info("[register message] %s", register);
                 String topic = register.topic();
-                Map<String, Queue<ConsumerHolder>> filterChannelQueue = consumers.get(topic);
+                Map<String, BlockingQueue<ConsumerHolder>> filterChannelQueue = consumers.get(topic);
                 if (filterChannelQueue == null) {
-                    filterChannelQueue = new ConcurrentHashMap<String, Queue<ConsumerHolder>>();
+                    filterChannelQueue = new ConcurrentHashMap<String, BlockingQueue<ConsumerHolder>>();
                     consumers.put(topic, filterChannelQueue);
                 }
                 String filter = register.filter();
                 filter = filter == null || "".equals(filter) ? NULL_FILTER : filter;
-                Queue<ConsumerHolder> channels = filterChannelQueue.get(filter);
+                BlockingQueue<ConsumerHolder> channels = filterChannelQueue.get(filter);
                 if (channels == null) {
-                    channels = new ConcurrentLinkedQueue<ConsumerHolder>();
+                    channels = new LinkedBlockingQueue<ConsumerHolder>();
                     filterChannelQueue.put(filter, channels);
                 }
                 ConsumerHolder consumer = new ConsumerHolder(ctx.channel());
@@ -231,12 +233,12 @@ public class Broker {
                         String topic = message.topic();
                         String filter = message.filter();
 
-                        Map<String, Queue<ConsumerHolder>> filterChannelMap = consumers.get(topic);
+                        Map<String, BlockingQueue<ConsumerHolder>> filterChannelMap = consumers.get(topic);
                         if (filterChannelMap != null) {
                             if (filter == null) {
                                 deliverMessageToNullFiltered(message, filterChannelMap);
                             } else {
-                                Queue<ConsumerHolder> channels = filterChannelMap.get(filter);
+                                BlockingQueue<ConsumerHolder> channels = filterChannelMap.get(filter);
                                 if (channels != null) {
                                     deliverMessage(message, channels);
                                 } else {
@@ -254,20 +256,20 @@ public class Broker {
             }
         }
 
-        private void deliverMessage(MessageWrapper message, Queue<ConsumerHolder> channels) {
-            ConsumerHolder consumer = channels.poll();
-            if (consumer != null) {
+        private void deliverMessage(MessageWrapper message, BlockingQueue<ConsumerHolder> channels) {
+            try {
+                ConsumerHolder consumer = channels.take();
                 consumer.channel.writeAndFlush(message);
                 channels.add(consumer);
                 Logger.info("[send message to] %s: %s", consumer, message);
                 consumeResult.put(message.msgId(), System.currentTimeMillis());
-            } else {
-                Logger.error("[no user for current channel]");
+            } catch (InterruptedException ignored) {
+                Logger.error("[get free consumer interrupted]");
             }
         }
 
-        private void deliverMessageToNullFiltered(MessageWrapper message, Map<String, Queue<ConsumerHolder>> filterChannelMap) {
-            Queue<ConsumerHolder> channels = filterChannelMap.get(NULL_FILTER);
+        private void deliverMessageToNullFiltered(MessageWrapper message, Map<String, BlockingQueue<ConsumerHolder>> filterChannelMap) {
+            BlockingQueue<ConsumerHolder> channels = filterChannelMap.get(NULL_FILTER);
             if (channels != null) {
                 deliverMessage(message, channels);
             } else {
