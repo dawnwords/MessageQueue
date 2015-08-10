@@ -15,6 +15,7 @@ import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -28,8 +29,9 @@ public class Broker {
     private static final String NULL_FILTER = "[]";
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
     private BlockingQueue<MessageWrapper> sendQueue;
-    private Map<String/* groupId */, Map<String/* filter */, Queue<Channel>>> consumers;
-    private Map<MessageId, BlockingQueue<ConsumeResult>> consumeResult;
+    private Map<String/* groupId */, Map<String/* filter */, Queue<ConsumerHolder>>> consumers;
+    private Map<ConsumerHolder, TopicFilter> consumerIndex;
+    private Map<MessageId, Long/* create time */> consumeResult;
     private volatile boolean stop;
     private AtomicBoolean fetchFailList;
     private Storage storage;
@@ -37,8 +39,9 @@ public class Broker {
     public Broker() {
         defaultEventExecutorGroup = new DefaultEventExecutorGroup(Parameter.SERVER_EXECUTOR_THREADS, new DefaultThreadFactory("NettyServerWorkerThread"));
         sendQueue = new LinkedBlockingQueue<MessageWrapper>();
-        consumers = new ConcurrentHashMap<String, Map<String, Queue<Channel>>>();
-        consumeResult = new ConcurrentHashMap<MessageId, BlockingQueue<ConsumeResult>>();
+        consumers = new ConcurrentHashMap<String, Map<String, Queue<ConsumerHolder>>>();
+        consumerIndex = new ConcurrentHashMap<ConsumerHolder, TopicFilter>();
+        consumeResult = new ConcurrentHashMap<MessageId, Long>();
         fetchFailList = new AtomicBoolean(false);
         storage = Parameter.STORAGE;
     }
@@ -79,6 +82,7 @@ public class Broker {
                     }
                 });
         ExecutorService threadPool = Executors.newCachedThreadPool();
+        threadPool.submit(new TimeoutWorker());
         for (int i = 0; i < Parameter.SERVER_EXECUTOR_THREADS; i++) {
             threadPool.submit(new MessageWorker());
         }
@@ -113,7 +117,23 @@ public class Broker {
         @Override
         public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause) {
             if (cause instanceof IOException) {
-                Logger.error("[client disconnected]");
+                ConsumerHolder key = new ConsumerHolder(ctx.channel());
+                TopicFilter topicFilter = consumerIndex.get(key);
+                if (topicFilter != null) {
+                    Map<String, Queue<ConsumerHolder>> filterConsumerMap = consumers.get(topicFilter.topic);
+                    if (filterConsumerMap != null) {
+                        Queue<ConsumerHolder> consumers = filterConsumerMap.get(topicFilter.filter);
+                        if (consumers != null) {
+                            consumers.remove(key);
+                            Logger.info("[consumer disconnected] %s", key);
+                            ctx.close();
+                            return;
+                        }
+                    }
+                    Logger.error("[no such consumer] %s", key);
+                } else {
+                    Logger.info("[producer disconnected] %s", key);
+                }
             } else {
                 Logger.error(cause);
             }
@@ -147,26 +167,37 @@ public class Broker {
             } else if (wrapper instanceof RegisterMessageWrapper) {
                 RegisterMessage register = ((RegisterMessageWrapper) wrapper).deserialize();
                 Logger.info("[register message] %s", register);
-                Map<String, Queue<Channel>> filterChannelQueue = consumers.get(register.topic());
+                String topic = register.topic();
+                Map<String, Queue<ConsumerHolder>> filterChannelQueue = consumers.get(topic);
                 if (filterChannelQueue == null) {
-                    filterChannelQueue = new ConcurrentHashMap<String, Queue<Channel>>();
-                    consumers.put(register.topic(), filterChannelQueue);
+                    filterChannelQueue = new ConcurrentHashMap<String, Queue<ConsumerHolder>>();
+                    consumers.put(topic, filterChannelQueue);
                 }
                 String filter = register.filter();
                 filter = filter == null || "".equals(filter) ? NULL_FILTER : filter;
-                Queue<Channel> channels = filterChannelQueue.get(filter);
+                Queue<ConsumerHolder> channels = filterChannelQueue.get(filter);
                 if (channels == null) {
-                    channels = new ConcurrentLinkedQueue<Channel>();
+                    channels = new ConcurrentLinkedQueue<ConsumerHolder>();
                     filterChannelQueue.put(filter, channels);
                 }
-                channels.add(ctx.channel());
+                ConsumerHolder consumer = new ConsumerHolder(ctx.channel());
+                channels.add(consumer);
+                consumerIndex.put(consumer, new TopicFilter(topic, filter));
             } else if (wrapper instanceof ConsumeResultWrapper) {
                 ConsumeResult result = ((ConsumeResultWrapper) wrapper).deserialize();
                 Logger.info("[consume result] %s", result);
                 MessageId msgId = result.msgId();
-                BlockingQueue<ConsumeResult> resultHolder = consumeResult.get(msgId);
-                if (resultHolder != null) {
-                    resultHolder.offer(result);
+                if (consumeResult.remove(msgId) != null) {
+                    switch (result.getStatus()) {
+                        case SUCCESS:
+                            storage.markSuccess(msgId.id());
+                            break;
+                        case FAIL:
+                            storage.markFail(msgId.id());
+                            break;
+                        default:
+                            Logger.error("[unknown ConsumeResult status] %s", result.getStatus());
+                    }
                 } else {
                     Logger.error("[unknown ConsumeResult id] %s", msgId);
                 }
@@ -200,12 +231,12 @@ public class Broker {
                         String topic = message.topic();
                         String filter = message.filter();
 
-                        Map<String, Queue<Channel>> filterChannelMap = consumers.get(topic);
+                        Map<String, Queue<ConsumerHolder>> filterChannelMap = consumers.get(topic);
                         if (filterChannelMap != null) {
                             if (filter == null) {
                                 deliverMessageToNullFiltered(message, filterChannelMap);
                             } else {
-                                Queue<Channel> channels = filterChannelMap.get(filter);
+                                Queue<ConsumerHolder> channels = filterChannelMap.get(filter);
                                 if (channels != null) {
                                     deliverMessage(message, channels);
                                 } else {
@@ -223,54 +254,106 @@ public class Broker {
             }
         }
 
-        private void deliverMessage(MessageWrapper message, Queue<Channel> channels) {
-            Channel consumer = null;
-            while (!channels.isEmpty()) {
-                consumer = channels.poll();
-                if (consumer.isOpen()) {
-                    break;
-                }
-            }
+        private void deliverMessage(MessageWrapper message, Queue<ConsumerHolder> channels) {
+            ConsumerHolder consumer = channels.poll();
             if (consumer != null) {
-                consumer.writeAndFlush(message);
+                consumer.channel.writeAndFlush(message);
                 channels.add(consumer);
                 Logger.info("[send message to] %s: %s", consumer, message);
-
-                BlockingQueue<ConsumeResult> result = new LinkedBlockingQueue<ConsumeResult>(1);
-                MessageId msgId = message.msgId();
-                consumeResult.put(msgId, result);
-                ConsumeResult consumeResult = null;
-                try {
-                    consumeResult = result.poll(Parameter.BROKER_TIME_OUT_SECOND, TimeUnit.SECONDS);
-                } catch (InterruptedException ignored) {
-                }
-                if (consumeResult == null) {
-                    storage.markFail(msgId.id());
-                    Logger.info("[receive ConsumeResult timeout] %s", msgId);
-                } else {
-                    switch (consumeResult.getStatus()) {
-                        case SUCCESS:
-                            storage.markSuccess(msgId.id());
-                            break;
-                        case FAIL:
-                            storage.markFail(msgId.id());
-                            break;
-                        default:
-                            Logger.error("[unknown ConsumeResult status] %s", consumeResult.getStatus());
-                    }
-                }
+                consumeResult.put(message.msgId(), System.currentTimeMillis());
             } else {
                 Logger.error("[no user for current channel]");
             }
         }
 
-        private void deliverMessageToNullFiltered(MessageWrapper message, Map<String, Queue<Channel>> filterChannelMap) {
-            Queue<Channel> channels = filterChannelMap.get(NULL_FILTER);
+        private void deliverMessageToNullFiltered(MessageWrapper message, Map<String, Queue<ConsumerHolder>> filterChannelMap) {
+            Queue<ConsumerHolder> channels = filterChannelMap.get(NULL_FILTER);
             if (channels != null) {
                 deliverMessage(message, channels);
             } else {
                 Logger.error("[no user for null filter]");
             }
+        }
+    }
+
+    private class TimeoutWorker implements Runnable {
+
+        @Override
+        public void run() {
+            while (!stop) {
+                long current = System.currentTimeMillis();
+                for (MessageId id : consumeResult.keySet()) {
+                    if (current - consumeResult.get(id) > Parameter.BROKER_TIME_OUT) {
+                        consumeResult.remove(id);
+                        storage.markFail(id.id());
+                        Logger.info("[consume result timeout] %s", id);
+                    }
+                }
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ignored) {
+                }
+            }
+        }
+    }
+
+    private class ConsumerHolder {
+        private InetSocketAddress remote, local;
+        private Channel channel;
+
+        ConsumerHolder(Channel channel) {
+            this.remote = (InetSocketAddress) channel.remoteAddress();
+            this.local = (InetSocketAddress) channel.localAddress();
+            this.channel = channel;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            ConsumerHolder that = (ConsumerHolder) o;
+            return remote.equals(that.remote) && local.equals(that.local);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = remote.hashCode();
+            result = 31 * result + local.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "ConsumerHolder{" +
+                    "remote=" + remote +
+                    ", local=" + local +
+                    '}';
+        }
+    }
+
+    private class TopicFilter {
+        private String topic, filter;
+
+        TopicFilter(String topic, String filter) {
+            this.topic = topic;
+            this.filter = filter;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TopicFilter that = (TopicFilter) o;
+            return topic.equals(that.topic) && !(filter != null ? !filter.equals(that.filter) : that.filter != null);
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = topic.hashCode();
+            result = 31 * result + (filter != null ? filter.hashCode() : 0);
+            return result;
         }
     }
 }
