@@ -83,10 +83,11 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
             totalLen += 4 + propKeys[i].length;
             totalLen += 4 + propVals[i].length;
         }
-        ByteBuffer result = ByteBuffer.allocate(totalLen + 24/*id + status + length*/);
+        ByteBuffer result = ByteBuffer.allocate(totalLen + 32 /* id(16) + length(4) + offset(8) + status(4) */);
         result.put(msgId);
-        result.putInt(MessageState.FAIL.ordinal());
         result.putInt(totalLen);
+        result.putLong(0);
+        result.putInt(MessageState.FAIL.ordinal());
         put(result, topic);
         put(result, body);
         result.putInt(propKeys.length);
@@ -102,7 +103,9 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
         this.msgId = new byte[16];
         buffer.get(msgId);
-        buffer.getLong();   //ignore status & length
+        buffer.getInt();        //ignore length
+        buffer.getLong();       //ignore offset
+        buffer.getInt();        //ignore status
         ByteBuffer timeBuffer = ByteBuffer.wrap(msgId);
         timeBuffer.getLong();   //ignore ip & port
         this.bornTime = timeBuffer.getLong();

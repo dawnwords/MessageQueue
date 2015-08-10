@@ -259,10 +259,10 @@ public class Broker {
         private void deliverMessage(MessageWrapper message, BlockingQueue<ConsumerHolder> channels) {
             try {
                 ConsumerHolder consumer = channels.take();
+                consumeResult.put(message.msgId(), System.currentTimeMillis());
                 consumer.channel.writeAndFlush(message);
                 channels.add(consumer);
                 Logger.info("[send message to] %s: %s", consumer, message);
-                consumeResult.put(message.msgId(), System.currentTimeMillis());
             } catch (InterruptedException ignored) {
                 Logger.error("[get free consumer interrupted]");
             }
@@ -288,7 +288,7 @@ public class Broker {
                     if (current - consumeResult.get(id) > Parameter.BROKER_TIME_OUT) {
                         consumeResult.remove(id);
                         storage.markFail(id.id());
-                        Logger.info("[consume result timeout] %s", id);
+                        Logger.error("[ConsumeResult timeout] %s", id);
                     }
                 }
                 try {
