@@ -60,7 +60,7 @@ public class DefaultStorage implements Storage {
             e.printStackTrace();
         }
         // should after bodyChannel and headerChannel open.
-        indexRebuild();
+//        indexRebuild();
 
         headerLookupTable = new ConcurrentHashMap<MessageId, OffsetState>();
         insertionTaskQueue = new LinkedBlockingQueue<StorageUnit>();
