@@ -22,7 +22,7 @@ import java.util.concurrent.*;
 /**
  * Created by slade on 2015/8/8.
  */
-public class DefaultStorage implements Storage {
+public class ImprovedDefaultStorage implements Storage {
     private ConcurrentHashMap<MessageId, OffsetState/*offset and state in headerFile*/> headerLookupTable;
     private BlockingQueue<StorageUnit> insertionTaskQueue;
     private ConcurrentHashMap<MessageId, BlockingQueue<Boolean>> insertionStateTable;

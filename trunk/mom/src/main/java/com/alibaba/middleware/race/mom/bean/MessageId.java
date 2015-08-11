@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Created by Dawnwords on 2015/8/9.
  */
-public class MessageId implements Serializable {
+public class MessageId implements Serializable{
     public static final int LENGTH = 16;
 
     private static AtomicLong ID_GEN = new AtomicLong(System.currentTimeMillis());
