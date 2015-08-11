@@ -42,7 +42,7 @@ public class DefaultStorage implements Storage {
 
         Path storeDir = FileSystems.getDefault().getPath(System.getProperty("user.home"), "store");
 
-        if(!Files.exists(storeDir) && !Files.isDirectory(storeDir)){
+        if (!Files.exists(storeDir) && !Files.isDirectory(storeDir)) {
             try {
                 Files.createDirectory(storeDir);
             } catch (IOException e) {
@@ -54,11 +54,13 @@ public class DefaultStorage implements Storage {
         Path bodyFile = FileSystems.getDefault().getPath(System.getProperty("user.home"), "store", "body.msg");
 
         try {
-            bodyChannel = AsynchronousFileChannel.open(bodyFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-            headerChannel = AsynchronousFileChannel.open(headerFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+            bodyChannel = AsynchronousFileChannel.open(bodyFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.SYNC);
+            headerChannel = AsynchronousFileChannel.open(headerFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.SYNC);
         } catch (IOException e) {
             e.printStackTrace();
         }
+        // should after bodyChannel and headerChannel open.
+        indexRebuild();
 
         headerLookupTable = new ConcurrentHashMap<MessageId, OffsetState>();
         insertionTaskQueue = new LinkedBlockingQueue<StorageUnit>();
@@ -181,7 +183,7 @@ public class DefaultStorage implements Storage {
         return failList;
     }
 
-    private void indexRebuild(){
+    private void indexRebuild() {
         ByteBuffer buf = ByteBuffer.allocate(Parameter.INDEX_LOAD_BUFF_SIZE);
         long startPos = 0l;
         Integer bytesRead = 0;
@@ -194,12 +196,12 @@ public class DefaultStorage implements Storage {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-        }while ();
+        } while (bytesRead > 0);
     }
 
     private void buildIndexEntry(long startPos, int bytesRead, ByteBuffer buf) {
-        for (int curPos = 0; curPos < bytesRead; startPos += StorageUnit.HEADER_LENGTH){
-            if (MessageState.values()[buf.getInt(curPos+28)] == MessageState.FAIL){
+        for (int curPos = 0; curPos < bytesRead; startPos += StorageUnit.HEADER_LENGTH) {
+            if (MessageState.values()[buf.getInt(curPos + 28)] == MessageState.FAIL) {
                 byte[] messageId = new byte[MessageId.LENGTH];
                 buf.get(messageId);
                 buf.position(MessageId.LENGTH);
@@ -233,7 +235,7 @@ public class DefaultStorage implements Storage {
                                     headerChannel.write(headerByteBuffer, headerOffsetBeforeInsert, resultQueue, new CompletionHandler<Integer, BlockingQueue<Boolean>>() {
                                         @Override
                                         public void completed(Integer result, BlockingQueue<Boolean> attachment) {
-                                            headerLookupTable.put(msgId, new OffsetState(headerOffsetBeforeInsert, unit.body().capacity(), bodyOffsetBeforeInsert,  MessageState.FAIL));
+                                            headerLookupTable.put(msgId, new OffsetState(headerOffsetBeforeInsert, unit.body().capacity(), bodyOffsetBeforeInsert, MessageState.FAIL));
                                             put(resultQueue, true);
                                         }
 
