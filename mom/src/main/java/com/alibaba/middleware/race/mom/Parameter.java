@@ -1,6 +1,8 @@
 package com.alibaba.middleware.race.mom;
 
-import com.alibaba.middleware.race.mom.store.*;
+import com.alibaba.middleware.race.mom.store.ImprovedDefaultStorage;
+import com.alibaba.middleware.race.mom.store.Storage;
+import com.alibaba.middleware.race.mom.store.StorageUnit;
 
 /**
  * Created by Dawnwords on 2015/7/22.
