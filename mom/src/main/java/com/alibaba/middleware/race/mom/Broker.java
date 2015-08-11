@@ -181,11 +181,6 @@ public class Broker {
                             sendQueue.add(new MessageWrapper().fromStorage(message));
                         }
                         Logger.info("[reload messages] size = %d", sendQueue.size());
-                    } else {
-                        try {
-                            Thread.sleep(Parameter.BROKER_MESSAGE_RELOAD_FREQUENCY);
-                        } catch (InterruptedException ignored) {
-                        }
                     }
                     fetchFailList.set(false);
                 } else {
