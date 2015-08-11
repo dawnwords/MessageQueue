@@ -181,6 +181,34 @@ public class DefaultStorage implements Storage {
         return failList;
     }
 
+    private void indexRebuild(){
+        ByteBuffer buf = ByteBuffer.allocate(Parameter.INDEX_LOAD_BUFF_SIZE);
+        long startPos = 0l;
+        Integer bytesRead = 0;
+
+        do {
+            try {
+                bytesRead = headerChannel.read(buf, startPos).get();
+                buildIndexEntry(startPos, bytesRead, buf);
+                startPos += bytesRead;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }while ();
+    }
+
+    private void buildIndexEntry(long startPos, int bytesRead, ByteBuffer buf) {
+        for (int curPos = 0; curPos < bytesRead; startPos += StorageUnit.HEADER_LENGTH){
+            if (MessageState.values()[buf.getInt(curPos+28)] == MessageState.FAIL){
+                byte[] messageId = new byte[MessageId.LENGTH];
+                buf.get(messageId);
+                buf.position(MessageId.LENGTH);
+                headerLookupTable.put(new MessageId(messageId), new OffsetState(startPos, buf.getInt(), buf.getLong(), MessageState.values()[buf.getInt()]));
+            }
+        }
+
+    }
+
     private class InsertWorker extends Thread {
 
         @Override
@@ -205,7 +233,7 @@ public class DefaultStorage implements Storage {
                                     headerChannel.write(headerByteBuffer, headerOffsetBeforeInsert, resultQueue, new CompletionHandler<Integer, BlockingQueue<Boolean>>() {
                                         @Override
                                         public void completed(Integer result, BlockingQueue<Boolean> attachment) {
-                                            headerLookupTable.put(msgId, new OffsetState(headerOffsetBeforeInsert, bodyOffsetBeforeInsert, unit.body().capacity(), MessageState.FAIL));
+                                            headerLookupTable.put(msgId, new OffsetState(headerOffsetBeforeInsert, unit.body().capacity(), bodyOffsetBeforeInsert,  MessageState.FAIL));
                                             put(resultQueue, true);
                                         }
 
@@ -274,7 +302,7 @@ public class DefaultStorage implements Storage {
         int bodyLength;
         MessageState state;
 
-        public OffsetState(long offset, long bodyOffset, int bodyLength, MessageState state) {
+        public OffsetState(long offset, int bodyLength, long bodyOffset, MessageState state) {
             this.offset = offset;
             this.bodyOffset = bodyOffset;
             this.bodyLength = bodyLength;

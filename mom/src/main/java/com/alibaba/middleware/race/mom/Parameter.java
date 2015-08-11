@@ -3,6 +3,7 @@ package com.alibaba.middleware.race.mom;
 import com.alibaba.middleware.race.mom.store.DefaultStorage;
 import com.alibaba.middleware.race.mom.store.DummyStorage;
 import com.alibaba.middleware.race.mom.store.Storage;
+import com.alibaba.middleware.race.mom.store.StorageUnit;
 
 /**
  * Created by Dawnwords on 2015/7/22.
@@ -28,4 +29,5 @@ public class Parameter {
     public static final int PRODUCER_TIME_OUT_SECOND = 10;
     public static final int BROKER_TIME_OUT = 10 * 1000;
     public static final int BROKER_MESSAGE_RELOAD_FREQUENCY = 1000;
+    public static final int INDEX_LOAD_BUFF_SIZE = StorageUnit.HEADER_LENGTH * 1024;
 }
