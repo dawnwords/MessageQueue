@@ -13,10 +13,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -76,7 +73,7 @@ public class ImprovedDefaultStorage implements Storage {
                 OffsetState state2 = headerLookupTable.get(o2);
                 int offset1 = state1 != null ? (int) state1.offset : 0;
                 int offset2 = state2 != null ? (int) state2.offset : 0;
-                return  offset1 - offset2;
+                return offset1 - offset2;
             }
         });
         markSuccessStateTable = new ConcurrentHashMap<MessageId, BlockingQueue<Boolean>>();
@@ -228,46 +225,44 @@ public class ImprovedDefaultStorage implements Storage {
                 LinkedList<StorageUnit> list = new LinkedList<StorageUnit>();
                 insertionTaskQueue.drainTo(list);
 
-                for (final StorageUnit unit : list) {
-                    final MessageId msgId = unit.msgId();
-                    final BlockingQueue<Boolean> resultQueue = insertionStateTable.get(msgId);
-                    try {
-                        final long bodyOffsetBeforeInsert = bodyChannel.size();
-                        bodyChannel.write(unit.body(), bodyOffsetBeforeInsert, resultQueue, new CompletionHandler<Integer, BlockingQueue<Boolean>>() {
+                int headerSize = 0;
+                int bodySize = 0;
+                for (StorageUnit u : list) {
+                    headerSize += StorageUnit.HEADER_LENGTH;
+                    bodySize += u.body().capacity();
+                }
+                ByteBuffer headerBlock = ByteBuffer.allocate(headerSize);
+                ByteBuffer bodyBlock = ByteBuffer.allocate(bodySize);
 
-                            @Override
-                            public void completed(Integer result, BlockingQueue<Boolean> attachment) {
-                                ByteBuffer headerByteBuffer = unit.header().putLong(20, bodyOffsetBeforeInsert);
-                                try {
-                                    final long headerOffsetBeforeInsert = headerChannel.size();
-                                    //TODO should probably add lock
-                                    headerChannel.write(headerByteBuffer, headerOffsetBeforeInsert, resultQueue, new CompletionHandler<Integer, BlockingQueue<Boolean>>() {
-                                        @Override
-                                        public void completed(Integer result, BlockingQueue<Boolean> attachment) {
-                                            headerLookupTable.put(msgId, new OffsetState(headerOffsetBeforeInsert, unit.body().capacity(), bodyOffsetBeforeInsert, MessageState.FAIL));
-                                            put(resultQueue, true);
-                                        }
-
-                                        @Override
-                                        public void failed(Throwable exc, BlockingQueue<Boolean> attachment) {
-                                            put(resultQueue, false);
-                                        }
-                                    });
-                                } catch (IOException e) {
-                                    put(resultQueue, false);
-                                } catch (Exception e) {
-                                    new RuntimeException(e);
-                                }
-                            }
-
-                            @Override
-                            public void failed(Throwable exc, BlockingQueue<Boolean> attachment) {
-                                put(resultQueue, false);
-                            }
-                        });
-                    } catch (IOException e) {
-                        put(resultQueue, false);
+                try {
+                    ArrayList<OffsetState> offsetStates = new ArrayList<OffsetState>();
+                    long bodyTail = bodyChannel.size();
+                    long headerTail = headerChannel.size();
+                    for (StorageUnit u : list) {
+                        bodyBlock.put(u.body());
+                        u.header().putLong(20, bodyTail);
+                        headerBlock.put(u.header());
+                        int bodyLength = u.body().capacity();
+                        offsetStates.add(new OffsetState(headerTail, bodyLength, bodyTail, MessageState.FAIL));
+                        headerTail += StorageUnit.HEADER_LENGTH;
+                        bodyTail += bodyLength;
                     }
+                    headerBlock.flip();
+                    bodyBlock.flip();
+                    Future<Integer> bodyFuture = bodyChannel.write(bodyBlock, bodyChannel.size());
+                    Future<Integer> headerFuture = headerChannel.write(headerBlock, headerChannel.size());
+                    headerFuture.get();
+                    bodyFuture.get();
+                    int i = 0;
+                    for (StorageUnit unit : list) {
+                        unit.header().position(0);
+                        unit.header().limit(StorageUnit.HEADER_LENGTH);
+                        MessageId msgId = unit.msgId();
+                        headerLookupTable.put(msgId, offsetStates.get(i++));
+                        insertionStateTable.get(msgId).put(true);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
         }

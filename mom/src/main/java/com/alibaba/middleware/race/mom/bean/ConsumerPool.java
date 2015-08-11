@@ -108,7 +108,8 @@ public class ConsumerPool {
         if (channels != null) {
             deliverMessage(message, channels);
         } else {
-            Logger.error("[no user for null filter]");
+            storage.markSuccess(message.msgId());
+            Logger.info("[no user for null filter]");
         }
     }
 
