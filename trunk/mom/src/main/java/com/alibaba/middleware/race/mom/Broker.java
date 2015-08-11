@@ -17,11 +17,9 @@ import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by Dawnwords on 2015/8/6.
@@ -48,9 +46,23 @@ public class Broker {
 
     public void start() {
         final EventLoopGroup bossGroup = new NioEventLoopGroup(
-                Parameter.SERVER_BOSS_THREADS, new DefaultThreadFactory("NettyBossSelector"));
+                Parameter.SERVER_BOSS_THREADS, new ThreadFactory() {
+            private AtomicInteger id = new AtomicInteger();
+
+            @Override
+            public Thread newThread(Runnable r) {
+                return new Thread(r, "NettyBoss-" + id.getAndIncrement());
+            }
+        });
         final EventLoopGroup workerGroup = new NioEventLoopGroup(
-                Parameter.SERVER_WORKER_THREADS, new DefaultThreadFactory("NettyServerSelector"));
+                Parameter.SERVER_WORKER_THREADS, new ThreadFactory() {
+            private AtomicInteger id = new AtomicInteger();
+
+            @Override
+            public Thread newThread(Runnable r) {
+                return new Thread(r, "NettyWorker-" + id.getAndIncrement());
+            }
+        });
         new ServerBootstrap()
                 .group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
@@ -79,11 +91,18 @@ public class Broker {
                     }
                 });
         storage.start();
-        ExecutorService threadPool = Executors.newCachedThreadPool();
-        threadPool.submit(new TimeoutWorker());
+        ExecutorService threadPool = Executors.newCachedThreadPool(new ThreadFactory() {
+            private AtomicInteger id = new AtomicInteger();
+
+            @Override
+            public Thread newThread(Runnable r) {
+                return new Thread(r, "MessageWorker-" + id.getAndIncrement());
+            }
+        });
         for (int i = 0; i < Parameter.MESSAGE_WORKER_THREAD; i++) {
             threadPool.submit(new MessageWorker());
         }
+        new Thread(new TimeoutWorker(), "Timeout Worker").start();
     }
 
     @ChannelHandler.Sharable
@@ -181,6 +200,11 @@ public class Broker {
                             sendQueue.add(new MessageWrapper().fromStorage(message));
                         }
                         Logger.info("[reload messages] size = %d", sendQueue.size());
+                    }
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
                     }
                     fetchFailList.set(false);
                 } else {
