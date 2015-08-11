@@ -81,7 +81,7 @@ public class Broker {
         storage.start();
         ExecutorService threadPool = Executors.newCachedThreadPool();
         threadPool.submit(new TimeoutWorker());
-        for (int i = 0; i < Parameter.SERVER_EXECUTOR_THREADS; i++) {
+        for (int i = 0; i < Parameter.MESSAGE_WORKER_THREAD; i++) {
             threadPool.submit(new MessageWorker());
         }
     }

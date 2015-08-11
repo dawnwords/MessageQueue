@@ -1,9 +1,6 @@
 package com.alibaba.middleware.race.mom;
 
-import com.alibaba.middleware.race.mom.store.DefaultStorage;
-import com.alibaba.middleware.race.mom.store.DummyStorage;
-import com.alibaba.middleware.race.mom.store.Storage;
-import com.alibaba.middleware.race.mom.store.StorageUnit;
+import com.alibaba.middleware.race.mom.store.*;
 
 /**
  * Created by Dawnwords on 2015/7/22.
@@ -22,11 +19,12 @@ public class Parameter {
     public static final int SND_BUF_SIZE = 65535;
     public static final int RCV_BUF_SIZE = 65535;
 
-    public static final Storage STORAGE = new DefaultStorage();
+    public static final Storage STORAGE = new ImprovedDefaultStorage();
 
     public static final int RESEND_NUM = 100;
 
     public static final int PRODUCER_TIME_OUT_SECOND = 10;
     public static final int BROKER_TIME_OUT = 10 * 1000;
     public static final int INDEX_LOAD_BUFF_SIZE = StorageUnit.HEADER_LENGTH * 1024;
+    public static final int MESSAGE_WORKER_THREAD = PROCESSORS * 6;
 }
