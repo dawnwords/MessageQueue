@@ -16,37 +16,35 @@ public interface Storage {
     /**
      * Insert a storageUnit that has already been built
      *
-     * @param unit ip + port + born time + length
-     *             + offset + <tt>MessageStatus.FAIL</tt>
-     *             + content
-     * @return true if operation success, false otherwise
+     * @param unit     ip + port + born time + length
+     *                 + offset + <tt>MessageStatus.FAIL</tt>
+     *                 + content
+     * @param callback return true if operation success, false otherwise
      */
-    boolean insert(StorageUnit unit);
+    void insert(StorageUnit unit, StorageCallback<Boolean> callback);
 
     /**
-     * Mark the state for the message with given id as <tt>MessageStatus.SUCCESS</tt>
+     * Mark the state for the message with given id as <tt>MessageStatus.SUCCESS</tt> asynchronously
      *
      * @param id id of the message to be marked
-     * @return true if the operation succeed, false otherwise
      */
-    boolean markSuccess(MessageId id);
+    void markSuccess(MessageId id);
 
     /**
-     * Mark the state for the message with given id as <tt>MessageStatus.FAIL</tt>
+     * Mark the state for the message with given id as <tt>MessageStatus.FAIL</tt> asynchronously
      *
      * @param id id of the message to be marked
-     * @return true if the operation succeed, false otherwise
      */
-    boolean markFail(MessageId id);
+    void markFail(MessageId id);
 
     /**
      * Get at most <tt>Parameter.PRODUCER_TIME_OUT_SECOND</tt> messages with the
      * state of <tt>MessageStatus.FAIL</tt> and mark their status as
      * <tt>MessageStatus.RESEND</tt>
      *
-     * @return those selected messages
+     * @param callback return those selected messages
      */
-    List<StorageUnit/* content */> failList();
+    void failList(StorageCallback<List<StorageUnit/* content */>> callback);
 
-    
+
 }

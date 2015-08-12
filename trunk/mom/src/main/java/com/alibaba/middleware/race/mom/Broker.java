@@ -4,6 +4,7 @@ import com.alibaba.middleware.race.mom.bean.*;
 import com.alibaba.middleware.race.mom.codec.Decoder;
 import com.alibaba.middleware.race.mom.codec.Encoder;
 import com.alibaba.middleware.race.mom.store.Storage;
+import com.alibaba.middleware.race.mom.store.StorageCallback;
 import com.alibaba.middleware.race.mom.store.StorageUnit;
 import com.alibaba.middleware.race.mom.util.Logger;
 import io.netty.bootstrap.ServerBootstrap;
@@ -174,17 +175,22 @@ public class Broker {
             consumers.registerConsumer(register, ctx.channel());
         }
 
-        private void handleMessageWrapper(MessageWrapper message) {
+        private void handleMessageWrapper(final MessageWrapper message) {
             Logger.info("[normal message]");
-            SendResult result;
-            if (storage.insert(message.toStorage())) {
-                result = SendResult.success(message.msgId());
-                sendQueue.offer(message);
-            } else {
-                result = SendResult.fail(message.msgId(), "fail to save message");
-            }
-            Logger.info("[send result] %s", result);
-            ctx.writeAndFlush(new SendResultWrapper().serialize(result));
+            storage.insert(message.toStorage(), new StorageCallback<Boolean>() {
+                @Override
+                public void complete(Boolean success) {
+                    SendResult result;
+                    if (success) {
+                        result = SendResult.success(message.msgId());
+                        sendQueue.offer(message);
+                    } else {
+                        result = SendResult.fail(message.msgId(), "fail to save message");
+                    }
+                    Logger.info("[send result] %s", result);
+                    ctx.writeAndFlush(new SendResultWrapper().serialize(result));
+                }
+            });
         }
     }
 
@@ -194,19 +200,23 @@ public class Broker {
             while (!stop) {
                 boolean shouldLoad = sendQueue.size() <= 1;
                 if (shouldLoad && fetchFailList.compareAndSet(false, true)) {
-                    List<StorageUnit> failList = storage.failList();
-                    if (failList.size() > 0) {
-                        for (StorageUnit message : failList) {
-                            sendQueue.add(new MessageWrapper().fromStorage(message));
+                    storage.failList(new StorageCallback<List<StorageUnit>>() {
+                        @Override
+                        public void complete(List<StorageUnit> failList) {
+                            if (failList.size() > 0) {
+                                for (StorageUnit message : failList) {
+                                    sendQueue.add(new MessageWrapper().fromStorage(message));
+                                }
+                                Logger.info("[reload messages] size = %d", sendQueue.size());
+                            }
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                throw new RuntimeException(e);
+                            }
+                            fetchFailList.set(false);
                         }
-                        Logger.info("[reload messages] size = %d", sendQueue.size());
-                    }
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                    fetchFailList.set(false);
+                    });
                 } else {
                     try {
                         MessageWrapper message = sendQueue.take();

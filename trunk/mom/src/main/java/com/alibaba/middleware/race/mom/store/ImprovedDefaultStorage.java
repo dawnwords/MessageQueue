@@ -22,11 +22,9 @@ import java.util.concurrent.*;
 public class ImprovedDefaultStorage implements Storage {
     private ConcurrentHashMap<MessageId, OffsetState/*offset and state in headerFile*/> headerLookupTable;
     private BlockingQueue<StorageUnit> insertionTaskQueue;
-    private ConcurrentHashMap<MessageId, BlockingQueue<Boolean>> insertionStateTable;
+    private ConcurrentHashMap<MessageId, StorageCallback<Boolean>> insertionStateTable;
 
     private BlockingQueue<MessageId> markSuccessQueue;
-    private ConcurrentHashMap<MessageId, BlockingQueue<Boolean>> markSuccessStateTable;
-
 
     private volatile boolean stop = true;
     private AsynchronousFileChannel bodyChannel;
@@ -62,7 +60,7 @@ public class ImprovedDefaultStorage implements Storage {
 
         headerLookupTable = new ConcurrentHashMap<MessageId, OffsetState>();
         insertionTaskQueue = new LinkedBlockingQueue<StorageUnit>();
-        insertionStateTable = new ConcurrentHashMap<MessageId, BlockingQueue<Boolean>>();
+        insertionStateTable = new ConcurrentHashMap<MessageId, StorageCallback<Boolean>>();
 
         new InsertWorker().start();
 
@@ -76,7 +74,6 @@ public class ImprovedDefaultStorage implements Storage {
                 return offset1 - offset2;
             }
         });
-        markSuccessStateTable = new ConcurrentHashMap<MessageId, BlockingQueue<Boolean>>();
         new MarkSuccessWorker().start();
     }
 
@@ -91,14 +88,6 @@ public class ImprovedDefaultStorage implements Storage {
 
     }
 
-    private void put(BlockingQueue<Boolean> queue, boolean result) {
-        try {
-            queue.put(result);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private void close(Closeable closeable) {
         if (closeable != null) {
             try {
@@ -110,42 +99,35 @@ public class ImprovedDefaultStorage implements Storage {
     }
 
     @Override
-    public boolean insert(StorageUnit storageUnit) {
+    public void insert(StorageUnit storageUnit, StorageCallback<Boolean> callback) {
         try {
-            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
-            insertionStateTable.put(storageUnit.msgId(), resultHolder);
+            insertionStateTable.put(storageUnit.msgId(), callback);
             insertionTaskQueue.put(storageUnit);
-            return resultHolder.take();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
 
     @Override
-    public boolean markSuccess(MessageId msgId) {
+    public void markSuccess(MessageId msgId) {
         try {
-            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
-            markSuccessStateTable.put(msgId, resultHolder);
             markSuccessQueue.put(msgId);
-            return resultHolder.take();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
 
     @Override
-    public boolean markFail(MessageId msgId) {
+    public void markFail(MessageId msgId) {
         OffsetState offsetState = headerLookupTable.get(msgId);
         if (offsetState != null) {
             offsetState.state = MessageState.FAIL;
-            return true;
         }
-        return false;
     }
 
 
     @Override
-    public List<StorageUnit> failList() {
+    public void failList(StorageCallback<List<StorageUnit>> callback) {
         LinkedList<StorageUnit> failList = new LinkedList<StorageUnit>();
         //TODO failList signal two water marks:try get & get
         ByteBuffer lastBody = null;
@@ -185,8 +167,7 @@ public class ImprovedDefaultStorage implements Storage {
                 throw new RuntimeException(e);
             }
         }
-
-        return failList;
+        callback.complete(failList);
     }
 
     private void indexRebuild() {
@@ -222,19 +203,20 @@ public class ImprovedDefaultStorage implements Storage {
         @Override
         public void run() {
             while (!stop) {
-                LinkedList<StorageUnit> list = new LinkedList<StorageUnit>();
-                insertionTaskQueue.drainTo(list);
-
-                int headerSize = 0;
-                int bodySize = 0;
-                for (StorageUnit u : list) {
-                    headerSize += StorageUnit.HEADER_LENGTH;
-                    bodySize += u.body().capacity();
-                }
-                ByteBuffer headerBlock = ByteBuffer.allocate(headerSize);
-                ByteBuffer bodyBlock = ByteBuffer.allocate(bodySize);
-
                 try {
+                    LinkedList<StorageUnit> list = new LinkedList<StorageUnit>();
+                    list.add(insertionTaskQueue.take());
+                    insertionTaskQueue.drainTo(list);
+
+                    int headerSize = 0;
+                    int bodySize = 0;
+                    for (StorageUnit u : list) {
+                        headerSize += StorageUnit.HEADER_LENGTH;
+                        bodySize += u.body().capacity();
+                    }
+                    ByteBuffer headerBlock = ByteBuffer.allocate(headerSize);
+                    ByteBuffer bodyBlock = ByteBuffer.allocate(bodySize);
+
                     ArrayList<OffsetState> offsetStates = new ArrayList<OffsetState>();
                     long bodyTail = bodyChannel.size();
                     long headerTail = headerChannel.size();
@@ -243,7 +225,7 @@ public class ImprovedDefaultStorage implements Storage {
                         u.header().putLong(20, bodyTail);
                         headerBlock.put(u.header());
                         int bodyLength = u.body().capacity();
-                        offsetStates.add(new OffsetState(headerTail, bodyLength, bodyTail, MessageState.FAIL));
+                        offsetStates.add(new OffsetState(headerTail, bodyLength, bodyTail, MessageState.RESEND));
                         headerTail += StorageUnit.HEADER_LENGTH;
                         bodyTail += bodyLength;
                     }
@@ -259,7 +241,7 @@ public class ImprovedDefaultStorage implements Storage {
                         unit.header().limit(StorageUnit.HEADER_LENGTH);
                         MessageId msgId = unit.msgId();
                         headerLookupTable.put(msgId, offsetStates.get(i++));
-                        insertionStateTable.get(msgId).put(true);
+                        insertionStateTable.get(msgId).complete(true);
                     }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -275,22 +257,24 @@ public class ImprovedDefaultStorage implements Storage {
             while (!stop) {
 
                 LinkedList<MessageId> list = new LinkedList<MessageId>();
+                try {
+                    list.add(markSuccessQueue.take());
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
                 markSuccessQueue.drainTo(list);
 
                 for (final MessageId msgId : list) {
-                    final BlockingQueue<Boolean> resultQueue = markSuccessStateTable.get(msgId);
                     OffsetState offsetState = headerLookupTable.get(msgId);
-                    if (resultQueue != null && offsetState != null) {
-                        headerChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + 28, resultQueue, new CompletionHandler<Integer, BlockingQueue<Boolean>>() {
+                    if (offsetState != null) {
+                        headerChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + 28, null, new CompletionHandler<Integer, Void>() {
                             @Override
-                            public void completed(Integer result, BlockingQueue<Boolean> attachment) {
+                            public void completed(Integer result, Void attachment) {
                                 headerLookupTable.remove(msgId);
-                                put(resultQueue, true);
                             }
 
                             @Override
-                            public void failed(Throwable exc, BlockingQueue<Boolean> attachment) {
-                                put(resultQueue, false);
+                            public void failed(Throwable exc, Void attachment) {
                             }
                         });
                     } else {

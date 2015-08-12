@@ -96,6 +96,26 @@ public class Improved3DefaultStorage implements Storage {
 
     }
 
+    @Override
+    public void insert(StorageUnit unit, StorageCallback<Boolean> callback) {
+
+    }
+
+    @Override
+    public void markSuccess(MessageId id) {
+
+    }
+
+    @Override
+    public void markFail(MessageId id) {
+
+    }
+
+    @Override
+    public void failList(StorageCallback<List<StorageUnit>> callback) {
+
+    }
+
     private void put(BlockingQueue<Boolean> queue, boolean result) {
         try {
             queue.put(result);
@@ -114,84 +134,84 @@ public class Improved3DefaultStorage implements Storage {
         }
     }
 
-    @Override
-    public boolean insert(StorageUnit storageUnit) {
-        try {
-            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
-            insertionStateTable.put(storageUnit.msgId(), resultHolder);
-            insertionTaskQueue.put(storageUnit);
-            return resultHolder.take();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public boolean markSuccess(MessageId msgId) {
-        try {
-            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
-            markSuccessStateTable.put(msgId, resultHolder);
-            markSuccessQueue.put(msgId);
-            return resultHolder.take();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public boolean markFail(MessageId msgId) {
-        OffsetState offsetState = headerLookupTable.get(msgId);
-        if (offsetState != null) {
-            offsetState.state = MessageState.FAIL;
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    public List<StorageUnit> failList() {
-        LinkedList<StorageUnit> failList = new LinkedList<StorageUnit>();
-        //TODO failList signal two water marks:try get & get
-        ByteBuffer lastBody = null;
-        ByteBuffer thisBody;
-        OffsetState state;
-        Future<Integer> future = null;
-        MessageId lastId = null;
-        MessageId thisId;
-        Iterator<MessageId> iterator = headerLookupTable.keySet().iterator();
-        while (iterator.hasNext()) {
-            lastId = iterator.next();
-            state = headerLookupTable.get(lastId);
-            if (state.state == MessageState.FAIL) {
-                lastBody = ByteBuffer.allocate(state.bodyLength);
-                future = bodyChannel.read(lastBody, state.bodyOffset);
-                break;
-            }
-        }
-        while (iterator.hasNext() && failList.size() < Parameter.RESEND_NUM) {
-            try {
-                thisId = iterator.next();
-                state = headerLookupTable.get(thisId);
-                if (state.state == MessageState.RESEND) {
-                    continue;
-                }
-                thisBody = ByteBuffer.allocate(state.bodyLength);
-                future.get();
-                future = bodyChannel.read(thisBody, state.bodyOffset);
-                ByteBuffer header = ByteBuffer.allocate(StorageUnit.HEADER_LENGTH);
-                header.put(lastId.id());
-                header.flip();
-                failList.add(new StorageUnit().header(header).body(lastBody));
-                state.state = MessageState.RESEND;
-                lastId = thisId;
-                lastBody = thisBody;
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        return failList;
-    }
+//    @Override
+//    public boolean insert(StorageUnit storageUnit) {
+//        try {
+//            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
+//            insertionStateTable.put(storageUnit.msgId(), resultHolder);
+//            insertionTaskQueue.put(storageUnit);
+//            return resultHolder.take();
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
+//
+//    @Override
+//    public boolean markSuccess(MessageId msgId) {
+//        try {
+//            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
+//            markSuccessStateTable.put(msgId, resultHolder);
+//            markSuccessQueue.put(msgId);
+//            return resultHolder.take();
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
+//
+//    @Override
+//    public boolean markFail(MessageId msgId) {
+//        OffsetState offsetState = headerLookupTable.get(msgId);
+//        if (offsetState != null) {
+//            offsetState.state = MessageState.FAIL;
+//            return true;
+//        }
+//        return false;
+//    }
+//
+//    @Override
+//    public List<StorageUnit> failList() {
+//        LinkedList<StorageUnit> failList = new LinkedList<StorageUnit>();
+//        //TODO failList signal two water marks:try get & get
+//        ByteBuffer lastBody = null;
+//        ByteBuffer thisBody;
+//        OffsetState state;
+//        Future<Integer> future = null;
+//        MessageId lastId = null;
+//        MessageId thisId;
+//        Iterator<MessageId> iterator = headerLookupTable.keySet().iterator();
+//        while (iterator.hasNext()) {
+//            lastId = iterator.next();
+//            state = headerLookupTable.get(lastId);
+//            if (state.state == MessageState.FAIL) {
+//                lastBody = ByteBuffer.allocate(state.bodyLength);
+//                future = bodyChannel.read(lastBody, state.bodyOffset);
+//                break;
+//            }
+//        }
+//        while (iterator.hasNext() && failList.size() < Parameter.RESEND_NUM) {
+//            try {
+//                thisId = iterator.next();
+//                state = headerLookupTable.get(thisId);
+//                if (state.state == MessageState.RESEND) {
+//                    continue;
+//                }
+//                thisBody = ByteBuffer.allocate(state.bodyLength);
+//                future.get();
+//                future = bodyChannel.read(thisBody, state.bodyOffset);
+//                ByteBuffer header = ByteBuffer.allocate(StorageUnit.HEADER_LENGTH);
+//                header.put(lastId.id());
+//                header.flip();
+//                failList.add(new StorageUnit().header(header).body(lastBody));
+//                state.state = MessageState.RESEND;
+//                lastId = thisId;
+//                lastBody = thisBody;
+//            } catch (Exception e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+//
+//        return failList;
+//    }
 
     private void indexRebuild() {
         ByteBuffer buf = ByteBuffer.allocate(Parameter.INDEX_LOAD_BUFF_SIZE);
