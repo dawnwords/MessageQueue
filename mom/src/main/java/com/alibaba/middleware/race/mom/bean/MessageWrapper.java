@@ -83,6 +83,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
         header.putInt(bodyLength);
         header.putLong(0);
         header.putInt(MessageState.FAIL.ordinal());
+        body.putLong(bornTime);
         put(body, topic);
         put(body, this.body);
         body.putInt(propKeys.length);
@@ -96,10 +97,10 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
     }
 
     private int bodyLength() {
-        int bodyLength = 0;
+        int bodyLength = 8; //born time
         bodyLength += 4 + topic.length;
         bodyLength += 4 + body.length;
-        bodyLength += 4;      // propKey.size
+        bodyLength += 4;    // propKey.size
         for (int i = 0; i < propKeys.length; i++) {
             bodyLength += 4 + propKeys[i].length;
             bodyLength += 4 + propVals[i].length;
@@ -116,9 +117,7 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
         header.getInt();        //ignore length
         header.getLong();       //ignore offset
         header.getInt();        //ignore status
-        ByteBuffer timeBuffer = ByteBuffer.wrap(msgId);
-        timeBuffer.getLong();   //ignore ip & port
-        this.bornTime = timeBuffer.getLong();
+        this.bornTime = body.getLong();
         this.topic = get(body);
         this.body = get(body);
         int propertiesLen = body.getInt();
