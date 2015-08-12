@@ -200,6 +200,19 @@ public class ImprovedDefaultStorage implements Storage {
 
     private class InsertWorker extends Thread {
 
+        private long bodyTail;
+        private long headerTail;
+
+        public InsertWorker() {
+            super("insertion worker");
+            try {
+                bodyTail = bodyChannel.size();
+                headerTail = headerChannel.size();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         @Override
         public void run() {
             while (!stop) {
@@ -218,8 +231,7 @@ public class ImprovedDefaultStorage implements Storage {
                     ByteBuffer bodyBlock = ByteBuffer.allocate(bodySize);
 
                     ArrayList<OffsetState> offsetStates = new ArrayList<OffsetState>();
-                    long bodyTail = bodyChannel.size();
-                    long headerTail = headerChannel.size();
+
                     for (StorageUnit u : list) {
                         bodyBlock.put(u.body());
                         u.header().putLong(20, bodyTail);
@@ -251,6 +263,9 @@ public class ImprovedDefaultStorage implements Storage {
     }
 
     private class MarkSuccessWorker extends Thread {
+        public MarkSuccessWorker() {
+            super("markSuccess worker");
+        }
 
         @Override
         public void run() {
