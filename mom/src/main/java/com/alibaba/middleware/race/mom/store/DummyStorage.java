@@ -23,31 +23,30 @@ public class DummyStorage implements Storage {
     }
 
     @Override
-    public boolean insert(StorageUnit unit) {
+    public void insert(StorageUnit unit, StorageCallback<Boolean> callback) {
         MessageId msgId = unit.msgId();
         Logger.info("[storage insert] id:%s", msgId);
-        storage.put(msgId, new MessageAndState(unit, MessageState.FAIL));
-        return true;
+        storage.put(msgId, new MessageAndState(unit, MessageState.RESEND));
+        callback.complete(true);
     }
 
     @Override
-    public boolean markSuccess(MessageId msgId) {
+    public void markSuccess(MessageId msgId) {
         Logger.info("[mark success] id %s", msgId);
         storage.remove(msgId);
-        return true;
     }
 
     @Override
-    public boolean markFail(MessageId msgId) {
+    public void markFail(MessageId msgId) {
         Logger.info("[mark fail] id %s", msgId);
         MessageAndState state = storage.get(msgId);
-        if (state == null) return false;
-        state.state = MessageState.FAIL;
-        return true;
+        if (state != null) {
+            state.state = MessageState.FAIL;
+        }
     }
 
     @Override
-    public List<StorageUnit> failList() {
+    public void failList(StorageCallback<List<StorageUnit>> callback) {
         List<StorageUnit> result = new LinkedList<StorageUnit>();
         for (MessageAndState state : storage.values()) {
             if (state.state == MessageState.FAIL) {
@@ -56,8 +55,9 @@ public class DummyStorage implements Storage {
             }
         }
         Logger.info("[fail list] %s", result);
-        return result;
+        callback.complete(result);
     }
+
 
     private class MessageAndState {
         private StorageUnit unit;
