@@ -48,4 +48,9 @@ public class StorageUnit {
         header.position(0);
         return new MessageId(msgIdBytes);
     }
+
+    @Override
+    public String toString() {
+        return "StorageUnit{" + msgId() + '}';
+    }
 }

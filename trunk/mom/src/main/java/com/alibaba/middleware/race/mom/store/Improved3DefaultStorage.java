@@ -22,18 +22,17 @@ import java.util.concurrent.*;
 public class Improved3DefaultStorage implements Storage {
     private ConcurrentHashMap<MessageId, OffsetState/*offset and state in headerFile*/> headerLookupTable;
     private BlockingQueue<StorageUnit> insertionTaskQueue;
-    private ConcurrentHashMap<MessageId, BlockingQueue<Boolean>> insertionStateTable;
+    private ConcurrentHashMap<MessageId, StorageCallback<Boolean>> insertionStateTable;
 
     private BlockingQueue<MessageId> markSuccessQueue;
-    private ConcurrentHashMap<MessageId, BlockingQueue<Boolean>> markSuccessStateTable;
 
 
     private volatile boolean stop = true;
     private AsynchronousFileChannel bodyChannel;
     private AsynchronousFileChannel headerChannel;
-    private BlockingQueue<IOInsertParameter> producer2ioParameterHolder = new ArrayBlockingQueue<IOInsertParameter>(1);
-    private BlockingQueue<IOInsertParameter> io2PostExecutorParameterHolder = new LinkedBlockingQueue<IOInsertParameter>();
-    private boolean ioRequest;
+    private BlockingQueue<IOInsertParameter> producer2ioParameterHolder;
+    private BlockingQueue<IOInsertParameter> io2PostExecutorParameterHolder;
+    private volatile boolean ioRequest;
 
     public void start() {
         if (!stop) {
@@ -65,7 +64,9 @@ public class Improved3DefaultStorage implements Storage {
 
         headerLookupTable = new ConcurrentHashMap<MessageId, OffsetState>();
         insertionTaskQueue = new LinkedBlockingQueue<StorageUnit>();
-        insertionStateTable = new ConcurrentHashMap<MessageId, BlockingQueue<Boolean>>();
+        insertionStateTable = new ConcurrentHashMap<MessageId, StorageCallback<Boolean>>();
+        producer2ioParameterHolder = new ArrayBlockingQueue<IOInsertParameter>(1);
+        io2PostExecutorParameterHolder = new LinkedBlockingQueue<IOInsertParameter>();
 
         new InsertTaskProducer().start();
         new InsertIOWorker().start();
@@ -81,7 +82,6 @@ public class Improved3DefaultStorage implements Storage {
                 return offset1 - offset2;
             }
         });
-        markSuccessStateTable = new ConcurrentHashMap<MessageId, BlockingQueue<Boolean>>();
         new MarkSuccessWorker().start();
     }
 
@@ -97,30 +97,29 @@ public class Improved3DefaultStorage implements Storage {
     }
 
     @Override
-    public void insert(StorageUnit unit, StorageCallback<Boolean> callback) {
-
-    }
-
-    @Override
-    public void markSuccess(MessageId id) {
-
-    }
-
-    @Override
-    public void markFail(MessageId id) {
-
-    }
-
-    @Override
-    public void failList(StorageCallback<List<StorageUnit>> callback) {
-
-    }
-
-    private void put(BlockingQueue<Boolean> queue, boolean result) {
+    public void insert(StorageUnit storageUnit, StorageCallback<Boolean> callback) {
         try {
-            queue.put(result);
+            insertionStateTable.put(storageUnit.msgId(), callback);
+            insertionTaskQueue.put(storageUnit);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void markSuccess(MessageId msgId) {
+        try {
+            markSuccessQueue.put(msgId);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void markFail(MessageId msgId) {
+        OffsetState offsetState = headerLookupTable.get(msgId);
+        if (offsetState != null) {
+            offsetState.state = MessageState.FAIL;
         }
     }
 
@@ -134,84 +133,49 @@ public class Improved3DefaultStorage implements Storage {
         }
     }
 
-//    @Override
-//    public boolean insert(StorageUnit storageUnit) {
-//        try {
-//            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
-//            insertionStateTable.put(storageUnit.msgId(), resultHolder);
-//            insertionTaskQueue.put(storageUnit);
-//            return resultHolder.take();
-//        } catch (InterruptedException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-//
-//    @Override
-//    public boolean markSuccess(MessageId msgId) {
-//        try {
-//            ArrayBlockingQueue<Boolean> resultHolder = new ArrayBlockingQueue<Boolean>(1);
-//            markSuccessStateTable.put(msgId, resultHolder);
-//            markSuccessQueue.put(msgId);
-//            return resultHolder.take();
-//        } catch (InterruptedException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-//
-//    @Override
-//    public boolean markFail(MessageId msgId) {
-//        OffsetState offsetState = headerLookupTable.get(msgId);
-//        if (offsetState != null) {
-//            offsetState.state = MessageState.FAIL;
-//            return true;
-//        }
-//        return false;
-//    }
-//
-//    @Override
-//    public List<StorageUnit> failList() {
-//        LinkedList<StorageUnit> failList = new LinkedList<StorageUnit>();
-//        //TODO failList signal two water marks:try get & get
-//        ByteBuffer lastBody = null;
-//        ByteBuffer thisBody;
-//        OffsetState state;
-//        Future<Integer> future = null;
-//        MessageId lastId = null;
-//        MessageId thisId;
-//        Iterator<MessageId> iterator = headerLookupTable.keySet().iterator();
-//        while (iterator.hasNext()) {
-//            lastId = iterator.next();
-//            state = headerLookupTable.get(lastId);
-//            if (state.state == MessageState.FAIL) {
-//                lastBody = ByteBuffer.allocate(state.bodyLength);
-//                future = bodyChannel.read(lastBody, state.bodyOffset);
-//                break;
-//            }
-//        }
-//        while (iterator.hasNext() && failList.size() < Parameter.RESEND_NUM) {
-//            try {
-//                thisId = iterator.next();
-//                state = headerLookupTable.get(thisId);
-//                if (state.state == MessageState.RESEND) {
-//                    continue;
-//                }
-//                thisBody = ByteBuffer.allocate(state.bodyLength);
-//                future.get();
-//                future = bodyChannel.read(thisBody, state.bodyOffset);
-//                ByteBuffer header = ByteBuffer.allocate(StorageUnit.HEADER_LENGTH);
-//                header.put(lastId.id());
-//                header.flip();
-//                failList.add(new StorageUnit().header(header).body(lastBody));
-//                state.state = MessageState.RESEND;
-//                lastId = thisId;
-//                lastBody = thisBody;
-//            } catch (Exception e) {
-//                throw new RuntimeException(e);
-//            }
-//        }
-//
-//        return failList;
-//    }
+    @Override
+    public void failList(StorageCallback<List<StorageUnit>> callback) {
+        LinkedList<StorageUnit> failList = new LinkedList<StorageUnit>();
+        //TODO failList signal two water marks:try get & get
+        ByteBuffer lastBody = null;
+        ByteBuffer thisBody;
+        OffsetState state;
+        Future<Integer> future = null;
+        MessageId lastId = null;
+        MessageId thisId;
+        Iterator<MessageId> iterator = headerLookupTable.keySet().iterator();
+        while (iterator.hasNext()) {
+            lastId = iterator.next();
+            state = headerLookupTable.get(lastId);
+            if (state.state == MessageState.FAIL) {
+                lastBody = ByteBuffer.allocate(state.bodyLength);
+                future = bodyChannel.read(lastBody, state.bodyOffset);
+                break;
+            }
+        }
+        while (iterator.hasNext() && failList.size() < Parameter.RESEND_NUM) {
+            try {
+                thisId = iterator.next();
+                state = headerLookupTable.get(thisId);
+                if (state.state == MessageState.RESEND) {
+                    continue;
+                }
+                thisBody = ByteBuffer.allocate(state.bodyLength);
+                future.get();
+                future = bodyChannel.read(thisBody, state.bodyOffset);
+                ByteBuffer header = ByteBuffer.allocate(StorageUnit.HEADER_LENGTH);
+                header.put(lastId.id());
+                header.flip();
+                failList.add(new StorageUnit().header(header).body(lastBody));
+                state.state = MessageState.RESEND;
+                lastId = thisId;
+                lastBody = thisBody;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        callback.complete(failList);
+    }
 
     private void indexRebuild() {
         ByteBuffer buf = ByteBuffer.allocate(Parameter.INDEX_LOAD_BUFF_SIZE);
@@ -246,17 +210,9 @@ public class Improved3DefaultStorage implements Storage {
         ArrayList<OffsetState> offsetStates;
         boolean insertSuccess;
 
-        public StorageUnit unit() {
-            return unit;
-        }
-
         public IOInsertParameter unit(StorageUnit unit) {
             this.unit = unit;
             return this;
-        }
-
-        public ArrayList<MessageId> msgIds() {
-            return msgIds;
         }
 
         public IOInsertParameter msgIds(ArrayList<MessageId> msgIds) {
@@ -264,22 +220,21 @@ public class Improved3DefaultStorage implements Storage {
             return this;
         }
 
-        public ArrayList<OffsetState> offsetStates() {
-            return offsetStates;
-        }
-
         public IOInsertParameter offsetStates(ArrayList<OffsetState> offsetStates) {
             this.offsetStates = offsetStates;
             return this;
         }
 
-        public boolean insertSuccess() {
-            return insertSuccess;
-        }
-
         public IOInsertParameter insertSuccess(boolean success) {
             this.insertSuccess = success;
             return this;
+        }
+
+        @Override
+        public String toString() {
+            return "IOInsertParameter{" +
+                    "batch size=" + offsetStates.size() +
+                    '}';
         }
     }
 
@@ -302,26 +257,31 @@ public class Improved3DefaultStorage implements Storage {
         public void run() {
             try {
                 while (!stop) {
-                    StorageUnit u = insertionTaskQueue.take();
-                    parameter.unit.body().put(u.body());
-                    byte[] msgId = new byte[MessageId.LENGTH];
-                    u.header().get(msgId);
-                    u.header().limit(StorageUnit.HEADER_LENGTH);
-                    u.header().position(0);
-                    u.header().putLong(20, bodyOffset);
-                    parameter.msgIds().add(new MessageId(msgId));
-                    parameter.unit.header().put(u.header());
-                    int bodyLength = u.body().capacity();
-                    parameter.offsetStates.add(new OffsetState(headerOffset, bodyLength, bodyOffset, MessageState.FAIL));
-                    headerOffset += StorageUnit.HEADER_LENGTH;
-                    bodyOffset += bodyLength;
-
+                    LinkedList<StorageUnit> list = new LinkedList<StorageUnit>();
+                    list.add(insertionTaskQueue.take());
+                    insertionTaskQueue.drainTo(list);
+                    for(StorageUnit u: list) {
+                        Logger.info("[get insert task] %s", u);
+                        parameter.unit.body().put(u.body());
+                        byte[] msgId = new byte[MessageId.LENGTH];
+                        u.header().get(msgId);
+                        u.header().limit(StorageUnit.HEADER_LENGTH);
+                        u.header().position(0);
+                        u.header().putLong(20, bodyOffset);
+                        parameter.msgIds.add(new MessageId(msgId));
+                        parameter.unit.header().put(u.header());
+                        int bodyLength = u.body().capacity();
+                        parameter.offsetStates.add(new OffsetState(headerOffset, bodyLength, bodyOffset, MessageState.FAIL));
+                        headerOffset += StorageUnit.HEADER_LENGTH;
+                        bodyOffset += bodyLength;
+                    }
                     if (ioRequest) {
                         try {
                             ioRequest = false;
                             parameter.unit.header().flip();
                             parameter.unit.body().flip();
                             producer2ioParameterHolder.put(parameter);
+                            Logger.info("[generate io task] %s", parameter);
                             initUnit();
                         } catch (InterruptedException e) {
                             throw new RuntimeException(e);
@@ -353,6 +313,7 @@ public class Improved3DefaultStorage implements Storage {
             while (!stop) {
                 try {
                     IOInsertParameter parameter = producer2ioParameterHolder.take();
+                    Logger.info("[get io task] %s", parameter);
                     headerChannel.write(parameter.unit.header(), headerChannel.size());
                     bodyChannel.write(parameter.unit.body(), bodyChannel.size(), parameter, new CompletionHandler<Integer, IOInsertParameter>() {
                         @Override
@@ -392,15 +353,16 @@ public class Improved3DefaultStorage implements Storage {
             try {
                 while (!stop) {
                     IOInsertParameter parameter = io2PostExecutorParameterHolder.take();
-                    if (parameter.insertSuccess()) {
+                    Logger.info("[post execute] %s", parameter);
+                    if (parameter.insertSuccess) {
                         int i = 0;
-                        for (MessageId msgId : parameter.msgIds()) {
-                            headerLookupTable.put(msgId, parameter.offsetStates().get(i++));
-                            insertionStateTable.get(msgId).put(true);
+                        for (MessageId msgId : parameter.msgIds) {
+                            headerLookupTable.put(msgId, parameter.offsetStates.get(i++));
+                            insertionStateTable.get(msgId).complete(true);
                         }
                     } else {
-                        for (MessageId msgId : parameter.msgIds()) {
-                            insertionStateTable.get(msgId).put(false);
+                        for (MessageId msgId : parameter.msgIds) {
+                            insertionStateTable.get(msgId).complete(false);
                         }
                     }
 
@@ -416,24 +378,25 @@ public class Improved3DefaultStorage implements Storage {
         @Override
         public void run() {
             while (!stop) {
-
                 LinkedList<MessageId> list = new LinkedList<MessageId>();
+                try {
+                    list.add(markSuccessQueue.take());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
                 markSuccessQueue.drainTo(list);
 
                 for (final MessageId msgId : list) {
-                    final BlockingQueue<Boolean> resultQueue = markSuccessStateTable.get(msgId);
                     OffsetState offsetState = headerLookupTable.get(msgId);
-                    if (resultQueue != null && offsetState != null) {
-                        headerChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + 28, resultQueue, new CompletionHandler<Integer, BlockingQueue<Boolean>>() {
+                    if (offsetState != null) {
+                        headerChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + 28, null, new CompletionHandler<Integer, Void>() {
                             @Override
-                            public void completed(Integer result, BlockingQueue<Boolean> attachment) {
+                            public void completed(Integer result, Void attachment) {
                                 headerLookupTable.remove(msgId);
-                                put(resultQueue, true);
                             }
 
                             @Override
-                            public void failed(Throwable exc, BlockingQueue<Boolean> attachment) {
-                                put(resultQueue, false);
+                            public void failed(Throwable exc, Void attachment) {
                             }
                         });
                     } else {
