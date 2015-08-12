@@ -28,5 +28,5 @@ public class Parameter {
     public static final int PRODUCER_TIME_OUT_SECOND = 10;
     public static final int BROKER_TIME_OUT = 10 * 1000;
     public static final int INDEX_LOAD_BUFF_SIZE = StorageUnit.HEADER_LENGTH * 1024;
-    public static final int MESSAGE_WORKER_THREAD = PROCESSORS * 6;
+    public static final int MESSAGE_WORKER_THREAD = PROCESSORS * 2;
 }
