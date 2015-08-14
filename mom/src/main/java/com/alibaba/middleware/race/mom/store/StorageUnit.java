@@ -11,41 +11,36 @@ import java.nio.ByteBuffer;
  * +----------------------------------------------+
  * |    ip    |    port   |          id           |
  * +----------------------------------------------+
- * |   length |          offset       |   state   |
+ * |  length  |   state   |  topicLen |  ~topic~  |
  * +----------------------------------------------+
- * |                   content                    |
+ * |  propNum | propkeyLen| ~propkey~ | propValLen|
+ * +----------------------------------------------+
+ * | ~propVal~|       bornTime        |  bodyLen  |
+ * +----------------------------------------------+
+ * |                 ~ body~                      |
  * +----------------------------------------------+
  */
 
 public class StorageUnit {
-    public static final int HEADER_LENGTH = 32;
+    public static final int HEADER_LENGTH = 24;
+    public static final int STATE_OFFSET = 20;
 
-    private ByteBuffer header;
-    private ByteBuffer body;
+    private ByteBuffer msg;
 
-    public ByteBuffer header() {
-        return header;
+    public ByteBuffer msg() {
+        return msg;
     }
 
-    public StorageUnit header(ByteBuffer header) {
-        this.header = header;
-        return this;
-    }
-
-    public ByteBuffer body() {
-        return body;
-    }
-
-    public StorageUnit body(ByteBuffer body) {
-        this.body = body;
+    public StorageUnit msg(ByteBuffer msg) {
+        this.msg = msg;
         return this;
     }
 
     public MessageId msgId() {
         byte[] msgIdBytes = new byte[MessageId.LENGTH];
-        header.get(msgIdBytes);
-        header.limit(HEADER_LENGTH);
-        header.position(0);
+        msg.position(0);
+        msg.get(msgIdBytes);
+        msg.position(0);
         return new MessageId(msgIdBytes);
     }
 

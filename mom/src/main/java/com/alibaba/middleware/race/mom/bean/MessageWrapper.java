@@ -76,57 +76,52 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
 
     @Override
     public StorageUnit toStorage() {
-        ByteBuffer header = ByteBuffer.allocate(StorageUnit.HEADER_LENGTH);
         int bodyLength = bodyLength();
-        ByteBuffer body = ByteBuffer.allocate(bodyLength);
-        header.put(msgId);
-        header.putInt(bodyLength);
-        header.putLong(0);
-        header.putInt(MessageState.FAIL.ordinal());
-        body.putLong(bornTime);
-        put(body, topic);
-        put(body, this.body);
-        body.putInt(propKeys.length);
+        ByteBuffer buffer = ByteBuffer.allocate(bodyLength + StorageUnit.HEADER_LENGTH);
+        buffer.put(msgId);
+        buffer.putInt(bodyLength);
+        buffer.putInt(MessageState.FAIL.ordinal());
+        put(buffer, topic);
+        buffer.putInt(propKeys.length);
         for (int i = 0; i < propKeys.length; i++) {
-            put(body, propKeys[i]);
-            put(body, propVals[i]);
+            put(buffer, propKeys[i]);
+            put(buffer, propVals[i]);
         }
-        header.flip();
-        body.flip();
-        return new StorageUnit().header(header).body(body);
+        buffer.putLong(bornTime);
+        put(buffer, body);
+        buffer.flip();
+        return new StorageUnit().msg(buffer);
     }
 
     private int bodyLength() {
-        int bodyLength = 8; //born time
-        bodyLength += 4 + topic.length;
-        bodyLength += 4 + body.length;
-        bodyLength += 4;    // propKey.size
+        int bodyLength = 4 + topic.length;
+        bodyLength += 4;    // propNum
         for (int i = 0; i < propKeys.length; i++) {
             bodyLength += 4 + propKeys[i].length;
             bodyLength += 4 + propVals[i].length;
         }
+        bodyLength += 8;    //born time
+        bodyLength += 4 + body.length;
         return bodyLength;
     }
 
     @Override
     public MessageWrapper fromStorage(StorageUnit unit) {
-        ByteBuffer body = unit.body();
-        ByteBuffer header = unit.header();
+        ByteBuffer msg = unit.msg();
         this.msgId = new byte[MessageId.LENGTH];
-        header.get(msgId);
-        header.getInt();        //ignore length
-        header.getLong();       //ignore offset
-        header.getInt();        //ignore status
-        this.bornTime = body.getLong();
-        this.topic = get(body);
-        this.body = get(body);
-        int propertiesLen = body.getInt();
+        msg.get(msgId);
+        msg.getInt();        //ignore length
+        msg.getInt();        //ignore status
+        this.topic = get(msg);
+        int propertiesLen = msg.getInt();
         this.propKeys = new byte[propertiesLen][];
         this.propVals = new byte[propertiesLen][];
         for (int i = 0; i < propertiesLen; i++) {
-            this.propKeys[i] = get(body);
-            this.propVals[i] = get(body);
+            this.propKeys[i] = get(msg);
+            this.propVals[i] = get(msg);
         }
+        this.bornTime = msg.getLong();
+        this.body = get(msg);
         return this;
     }
 
