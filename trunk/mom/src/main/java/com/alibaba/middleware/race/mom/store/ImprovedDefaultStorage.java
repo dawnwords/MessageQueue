@@ -4,7 +4,6 @@ import com.alibaba.middleware.race.mom.Parameter;
 import com.alibaba.middleware.race.mom.bean.MessageId;
 import com.alibaba.middleware.race.mom.util.Logger;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
@@ -27,8 +26,7 @@ public class ImprovedDefaultStorage implements Storage {
     private BlockingQueue<MessageId> markSuccessQueue;
 
     private volatile boolean stop = true;
-    private AsynchronousFileChannel bodyChannel;
-    private AsynchronousFileChannel headerChannel;
+    private AsynchronousFileChannel messageChannel;
 
     public void start() {
         if (!stop) {
@@ -46,17 +44,12 @@ public class ImprovedDefaultStorage implements Storage {
             }
         }
 
-        Path headerFile = FileSystems.getDefault().getPath(System.getProperty("user.home"), "store", "header.msg");
-        Path bodyFile = FileSystems.getDefault().getPath(System.getProperty("user.home"), "store", "body.msg");
-
         try {
-            bodyChannel = AsynchronousFileChannel.open(bodyFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.SYNC);
-            headerChannel = AsynchronousFileChannel.open(headerFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.SYNC);
+            Path bodyFile = FileSystems.getDefault().getPath(System.getProperty("user.home"), "store", "message.data");
+            messageChannel = AsynchronousFileChannel.open(bodyFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.SYNC);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        // should after bodyChannel and headerChannel open.
-//        indexRebuild();
 
         headerLookupTable = new ConcurrentHashMap<MessageId, OffsetState>();
         insertionTaskQueue = new LinkedBlockingQueue<StorageUnit>();
@@ -83,15 +76,9 @@ public class ImprovedDefaultStorage implements Storage {
         }
         stop = true;
 
-        close(headerChannel);
-        close(bodyChannel);
-
-    }
-
-    private void close(Closeable closeable) {
-        if (closeable != null) {
+        if (messageChannel != null) {
             try {
-                closeable.close();
+                messageChannel.close();
             } catch (IOException ignored) {
             }
 
@@ -130,39 +117,31 @@ public class ImprovedDefaultStorage implements Storage {
     public void failList(StorageCallback<List<StorageUnit>> callback) {
         LinkedList<StorageUnit> failList = new LinkedList<StorageUnit>();
         //TODO failList signal two water marks:try get & get
-        ByteBuffer lastBody = null;
-        ByteBuffer thisBody;
+        ByteBuffer lastMsg = null;
+        ByteBuffer thisMsg;
         OffsetState state;
         Future<Integer> future = null;
-        MessageId lastId = null;
-        MessageId thisId;
         Iterator<MessageId> iterator = headerLookupTable.keySet().iterator();
         while (iterator.hasNext()) {
-            lastId = iterator.next();
-            state = headerLookupTable.get(lastId);
+            state = headerLookupTable.get(iterator.next());
             if (state.state == MessageState.FAIL) {
-                lastBody = ByteBuffer.allocate(state.bodyLength);
-                future = bodyChannel.read(lastBody, state.bodyOffset);
+                lastMsg = ByteBuffer.allocate(state.length);
+                future = messageChannel.read(lastMsg, state.offset);
                 break;
             }
         }
         while (iterator.hasNext() && failList.size() < Parameter.RESEND_NUM) {
             try {
-                thisId = iterator.next();
-                state = headerLookupTable.get(thisId);
+                state = headerLookupTable.get(iterator.next());
                 if (state.state == MessageState.RESEND) {
                     continue;
                 }
-                thisBody = ByteBuffer.allocate(state.bodyLength);
+                thisMsg = ByteBuffer.allocate(state.length);
                 future.get();
-                future = bodyChannel.read(thisBody, state.bodyOffset);
-                ByteBuffer header = ByteBuffer.allocate(StorageUnit.HEADER_LENGTH);
-                header.put(lastId.id());
-                header.flip();
-                failList.add(new StorageUnit().header(header).body(lastBody));
+                future = messageChannel.read(thisMsg, state.offset);
+                failList.add(new StorageUnit().msg(lastMsg));
                 state.state = MessageState.RESEND;
-                lastId = thisId;
-                lastBody = thisBody;
+                lastMsg = thisMsg;
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -170,44 +149,14 @@ public class ImprovedDefaultStorage implements Storage {
         callback.complete(failList);
     }
 
-    private void indexRebuild() {
-        ByteBuffer buf = ByteBuffer.allocate(Parameter.INDEX_LOAD_BUFF_SIZE);
-        long startPos = 0l;
-        Integer bytesRead = 0;
-
-        do {
-            try {
-                bytesRead = headerChannel.read(buf, startPos).get();
-                buildIndexEntry(startPos, bytesRead, buf);
-                startPos += bytesRead;
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        } while (bytesRead > 0);
-    }
-
-    private void buildIndexEntry(long startPos, int bytesRead, ByteBuffer buf) {
-        for (int curPos = 0; curPos < bytesRead; startPos += StorageUnit.HEADER_LENGTH) {
-            if (MessageState.values()[buf.getInt(curPos + 28)] == MessageState.FAIL) {
-                byte[] messageId = new byte[MessageId.LENGTH];
-                buf.get(messageId);
-                buf.position(MessageId.LENGTH);
-                headerLookupTable.put(new MessageId(messageId), new OffsetState(startPos, buf.getInt(), buf.getLong(), MessageState.values()[buf.getInt()]));
-            }
-        }
-
-    }
-
     private class InsertWorker extends Thread {
 
-        private long bodyTail;
-        private long headerTail;
+        private long offset;
 
         public InsertWorker() {
             super("insertion worker");
             try {
-                bodyTail = bodyChannel.size();
-                headerTail = headerChannel.size();
+                offset = messageChannel.size();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -221,36 +170,24 @@ public class ImprovedDefaultStorage implements Storage {
                     list.add(insertionTaskQueue.take());
                     insertionTaskQueue.drainTo(list);
 
-                    int headerSize = 0;
-                    int bodySize = 0;
+                    int msgSize = 0;
                     for (StorageUnit u : list) {
-                        headerSize += StorageUnit.HEADER_LENGTH;
-                        bodySize += u.body().capacity();
+                        msgSize += u.msg().capacity();
                     }
-                    ByteBuffer headerBlock = ByteBuffer.allocate(headerSize);
-                    ByteBuffer bodyBlock = ByteBuffer.allocate(bodySize);
+                    ByteBuffer msgBlock = ByteBuffer.allocate(msgSize);
 
                     ArrayList<OffsetState> offsetStates = new ArrayList<OffsetState>();
-
                     for (StorageUnit u : list) {
-                        bodyBlock.put(u.body());
-                        u.header().putLong(20, bodyTail);
-                        headerBlock.put(u.header());
-                        int bodyLength = u.body().capacity();
-                        offsetStates.add(new OffsetState(headerTail, bodyLength, bodyTail, MessageState.RESEND));
-                        headerTail += StorageUnit.HEADER_LENGTH;
-                        bodyTail += bodyLength;
+                        msgBlock.put(u.msg());
+                        int length = u.msg().capacity();
+                        offsetStates.add(new OffsetState(offset, length, MessageState.RESEND));
+                        offset += length;
                     }
-                    headerBlock.flip();
-                    bodyBlock.flip();
-                    Future<Integer> bodyFuture = bodyChannel.write(bodyBlock, bodyChannel.size());
-                    Future<Integer> headerFuture = headerChannel.write(headerBlock, headerChannel.size());
-                    headerFuture.get();
-                    bodyFuture.get();
+                    msgBlock.flip();
+                    messageChannel.write(msgBlock, messageChannel.size()).get();
+                    //TODO try asynchronous callback
                     int i = 0;
                     for (StorageUnit unit : list) {
-                        unit.header().position(0);
-                        unit.header().limit(StorageUnit.HEADER_LENGTH);
                         MessageId msgId = unit.msgId();
                         headerLookupTable.put(msgId, offsetStates.get(i++));
                         insertionStateTable.get(msgId).complete(true);
@@ -270,7 +207,6 @@ public class ImprovedDefaultStorage implements Storage {
         @Override
         public void run() {
             while (!stop) {
-
                 LinkedList<MessageId> list = new LinkedList<MessageId>();
                 try {
                     list.add(markSuccessQueue.take());
@@ -282,7 +218,8 @@ public class ImprovedDefaultStorage implements Storage {
                 for (final MessageId msgId : list) {
                     OffsetState offsetState = headerLookupTable.get(msgId);
                     if (offsetState != null) {
-                        headerChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + 28, null, new CompletionHandler<Integer, Void>() {
+                        messageChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + StorageUnit.STATE_OFFSET
+                                , null, new CompletionHandler<Integer, Void>() {
                             @Override
                             public void completed(Integer result, Void attachment) {
                                 headerLookupTable.remove(msgId);
@@ -303,14 +240,12 @@ public class ImprovedDefaultStorage implements Storage {
 
     class OffsetState {
         long offset;
-        long bodyOffset;
-        int bodyLength;
+        int length;
         MessageState state;
 
-        public OffsetState(long offset, int bodyLength, long bodyOffset, MessageState state) {
+        public OffsetState(long offset, int length, MessageState state) {
             this.offset = offset;
-            this.bodyOffset = bodyOffset;
-            this.bodyLength = bodyLength;
+            this.length = length;
             this.state = state;
         }
     }
