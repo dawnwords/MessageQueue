@@ -19,7 +19,7 @@ import java.util.concurrent.*;
 /**
  * Created by slade on 2015/8/8.
  */
-public class Improved3DefaultStorage implements Storage {
+public class ImprovedImproved3DefaultStorage implements Storage {
     private ConcurrentHashMap<MessageId, OffsetState/*offset and state in headerFile*/> headerLookupTable;
     private BlockingQueue<StorageUnit> insertionTaskQueue;
     private ConcurrentHashMap<MessageId, StorageCallback<Boolean>> insertionStateTable;
@@ -70,7 +70,6 @@ public class Improved3DefaultStorage implements Storage {
 
         new InsertTaskProducer().start();
         new InsertIOWorker().start();
-        new PostExecutor().start();
 
         markSuccessQueue = new PriorityBlockingQueue<MessageId>(11, new Comparator<MessageId>() {
             @Override
@@ -208,7 +207,6 @@ public class Improved3DefaultStorage implements Storage {
         StorageUnit unit;
         ArrayList<MessageId> msgIds;
         ArrayList<OffsetState> offsetStates;
-        boolean insertSuccess;
 
         public IOInsertParameter unit(StorageUnit unit) {
             this.unit = unit;
@@ -222,11 +220,6 @@ public class Improved3DefaultStorage implements Storage {
 
         public IOInsertParameter offsetStates(ArrayList<OffsetState> offsetStates) {
             this.offsetStates = offsetStates;
-            return this;
-        }
-
-        public IOInsertParameter insertSuccess(boolean success) {
-            this.insertSuccess = success;
             return this;
         }
 
@@ -310,64 +303,32 @@ public class Improved3DefaultStorage implements Storage {
         @Override
         public void run() {
             ioRequest = true;
-            while (!stop) {
-                try {
+            try {
+                while (!stop) {
                     IOInsertParameter parameter = producer2ioParameterHolder.take();
                     Logger.info("[get io task] %s", parameter);
                     headerChannel.write(parameter.unit.header(), headerChannel.size());
                     bodyChannel.write(parameter.unit.body(), bodyChannel.size(), parameter, new CompletionHandler<Integer, IOInsertParameter>() {
                         @Override
                         public void completed(Integer result, IOInsertParameter parameter) {
-                            writeComplete(parameter, true);
+                            int i = 0;
+                            for (MessageId msgId : parameter.msgIds) {
+                                headerLookupTable.put(msgId, parameter.offsetStates.get(i++));
+                                insertionStateTable.get(msgId).complete(true);
+                            }
+                            ioRequest = true;
                         }
 
                         @Override
                         public void failed(Throwable exc, IOInsertParameter parameter) {
-                            writeComplete(parameter, false);
-                        }
-
-                        private void writeComplete(IOInsertParameter parameter, boolean success) {
-                            parameter.insertSuccess(success);
-                            try {
-                                io2PostExecutorParameterHolder.put(parameter);
-                                ioRequest = true;
-                            } catch (InterruptedException e) {
-                                throw new RuntimeException(e);
+                            for (MessageId msgId : parameter.msgIds) {
+                                insertionStateTable.get(msgId).complete(false);
                             }
+                            ioRequest = true;
                         }
                     });
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
                 }
-            }
-        }
-    }
-
-    private class PostExecutor extends Thread {
-        public PostExecutor() {
-            super("Post Executor");
-        }
-
-        @Override
-        public void run() {
-            try {
-                while (!stop) {
-                    IOInsertParameter parameter = io2PostExecutorParameterHolder.take();
-                    Logger.info("[post execute] %s", parameter);
-                    if (parameter.insertSuccess) {
-                        int i = 0;
-                        for (MessageId msgId : parameter.msgIds) {
-                            headerLookupTable.put(msgId, parameter.offsetStates.get(i++));
-                            insertionStateTable.get(msgId).complete(true);
-                        }
-                    } else {
-                        for (MessageId msgId : parameter.msgIds) {
-                            insertionStateTable.get(msgId).complete(false);
-                        }
-                    }
-
-                }
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
