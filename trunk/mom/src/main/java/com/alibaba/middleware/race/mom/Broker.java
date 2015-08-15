@@ -183,12 +183,14 @@ public class Broker {
                     SendResult result;
                     if (success) {
                         result = SendResult.success(message.msgId());
-                        sendQueue.offer(message);
                     } else {
                         result = SendResult.fail(message.msgId(), "fail to save message");
                     }
                     Logger.info("[send result] %s", result);
                     ctx.writeAndFlush(new SendResultWrapper().serialize(result));
+                    if(success) {
+                        sendQueue.offer(message);
+                    }
                 }
             });
         }
