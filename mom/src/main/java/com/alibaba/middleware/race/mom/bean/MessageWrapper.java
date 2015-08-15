@@ -53,25 +53,14 @@ public class MessageWrapper implements SerializeWrapper<Message>, Storable<Messa
 
     @Override
     public void encode(ByteBuf out) {
+        StorageUnit unit = toStorage();
         out.writeByte(MESSAGE);
-        Encoder.encode(out, topic);
-        Encoder.encode(out, body);
-        out.writeBytes(msgId);
-        out.writeLong(bornTime);
-        Encoder.encode(out, propKeys);
-        Encoder.encode(out, propVals);
+        out.writeBytes(unit.msg());
     }
 
     @Override
     public MessageWrapper decode(ByteBuf in) {
-        this.topic = Decoder.decode(in);
-        this.body = Decoder.decode(in);
-        this.msgId = new byte[MessageId.LENGTH];
-        in.readBytes(msgId);
-        this.bornTime = in.readLong();
-        this.propKeys = Decoder.decodeArray(in);
-        this.propVals = Decoder.decodeArray(in);
-        return this;
+        return fromStorage(new StorageUnit().msg(in.nioBuffer()));
     }
 
     @Override
