@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
+import java.nio.channels.FileChannel;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,7 +27,7 @@ public class ImprovedDefaultStorage implements Storage {
     private BlockingQueue<MessageId> markSuccessQueue;
 
     private volatile boolean stop = true;
-    private AsynchronousFileChannel messageChannel;
+    private FileChannel messageChannel;
 
     public void start() {
         if (!stop) {
@@ -46,7 +47,7 @@ public class ImprovedDefaultStorage implements Storage {
 
         try {
             Path bodyFile = FileSystems.getDefault().getPath(System.getProperty("user.home"), "store", "message.data");
-            messageChannel = AsynchronousFileChannel.open(bodyFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.SYNC);
+            messageChannel = FileChannel.open(bodyFile, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.SYNC);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -120,16 +121,8 @@ public class ImprovedDefaultStorage implements Storage {
         ByteBuffer lastMsg = null;
         ByteBuffer thisMsg;
         OffsetState state;
-        Future<Integer> future = null;
         Iterator<MessageId> iterator = headerLookupTable.keySet().iterator();
-        while (iterator.hasNext()) {
-            state = headerLookupTable.get(iterator.next());
-            if (state.state == MessageState.FAIL) {
-                lastMsg = ByteBuffer.allocate(state.length);
-                future = messageChannel.read(lastMsg, state.offset);
-                break;
-            }
-        }
+
         while (iterator.hasNext() && failList.size() < Parameter.RESEND_NUM) {
             try {
                 state = headerLookupTable.get(iterator.next());
@@ -137,8 +130,7 @@ public class ImprovedDefaultStorage implements Storage {
                     continue;
                 }
                 thisMsg = ByteBuffer.allocate(state.length);
-                future.get();
-                future = messageChannel.read(thisMsg, state.offset);
+                messageChannel.read(thisMsg, state.offset);
                 failList.add(new StorageUnit().msg(lastMsg));
                 state.state = MessageState.RESEND;
                 lastMsg = thisMsg;
@@ -184,8 +176,7 @@ public class ImprovedDefaultStorage implements Storage {
                         offset += length;
                     }
                     msgBlock.flip();
-                    messageChannel.write(msgBlock, messageChannel.size()).get();
-                    //TODO try asynchronous callback
+                    messageChannel.write(msgBlock, messageChannel.size());
                     int i = 0;
                     for (StorageUnit unit : list) {
                         MessageId msgId = unit.msgId();
@@ -215,24 +206,17 @@ public class ImprovedDefaultStorage implements Storage {
                 }
                 markSuccessQueue.drainTo(list);
 
-                for (final MessageId msgId : list) {
-                    OffsetState offsetState = headerLookupTable.get(msgId);
-                    if (offsetState != null) {
-                        messageChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + StorageUnit.STATE_OFFSET
-                                , null, new CompletionHandler<Integer, Void>() {
-                            @Override
-                            public void completed(Integer result, Void attachment) {
-                                headerLookupTable.remove(msgId);
-                            }
-
-                            @Override
-                            public void failed(Throwable exc, Void attachment) {
-                            }
-                        });
-                    } else {
-                        Logger.error("[markSuccess unknown message id] %s", msgId);
+                try {
+                    for (final MessageId msgId : list) {
+                        OffsetState offsetState = headerLookupTable.get(msgId);
+                        if (offsetState != null) {
+                            messageChannel.write(ByteBuffer.allocate(4).putInt(MessageState.SUCCESS.ordinal()), offsetState.offset + StorageUnit.STATE_OFFSET);
+                        } else {
+                            Logger.error("[markSuccess unknown message id] %s", msgId);
+                        }
                     }
-
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
