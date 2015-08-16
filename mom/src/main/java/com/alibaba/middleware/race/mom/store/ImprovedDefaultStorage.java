@@ -118,8 +118,7 @@ public class ImprovedDefaultStorage implements Storage {
     public void failList(StorageCallback<List<StorageUnit>> callback) {
         LinkedList<StorageUnit> failList = new LinkedList<StorageUnit>();
         //TODO failList signal two water marks:try get & get
-        ByteBuffer lastMsg = null;
-        ByteBuffer thisMsg;
+        ByteBuffer message;
         OffsetState state;
         Iterator<MessageId> iterator = headerLookupTable.keySet().iterator();
 
@@ -129,11 +128,10 @@ public class ImprovedDefaultStorage implements Storage {
                 if (state.state == MessageState.RESEND) {
                     continue;
                 }
-                thisMsg = ByteBuffer.allocate(state.length);
-                messageChannel.read(thisMsg, state.offset);
-                failList.add(new StorageUnit().msg(lastMsg));
+                message = ByteBuffer.allocate(state.length);
+                messageChannel.read(message, state.offset);
+                failList.add(new StorageUnit().msg(message));
                 state.state = MessageState.RESEND;
-                lastMsg = thisMsg;
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
