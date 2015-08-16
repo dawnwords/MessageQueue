@@ -21,7 +21,7 @@ public class MomStressTest {
     private static AtomicLong recvCount = new AtomicLong();
     private static AtomicLong totalRT = new AtomicLong();
     private static AtomicLong totalDelay = new AtomicLong();
-    private static int c = Integer.valueOf(System.getProperty("C", "30"));
+    private static int c = Integer.valueOf(System.getProperty("C", "200"));
     private static ExecutorService executorService = Executors.newFixedThreadPool(c);
 
     private static TestResult testResult = new TestResult();
