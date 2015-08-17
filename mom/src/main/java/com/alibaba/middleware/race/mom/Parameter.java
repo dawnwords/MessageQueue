@@ -29,9 +29,9 @@ public class Parameter {
     public static final int INDEX_LOAD_BUFF_SIZE = StorageUnit.HEADER_LENGTH * 1024;
     public static final int MESSAGE_WORKER_THREAD = PROCESSORS * 2;
 
-    private static final int EXPECT_RT_NANO = 80 * 1000 * 1000;
-    private static final int ESTIMATED_DISK_DELAY_NANO = 20 * 1000 * 1000;
-    public static final int FLUSH_DISK_TIME_THRESHOLD = EXPECT_RT_NANO - ESTIMATED_DISK_DELAY_NANO;
+    private static final int EXPECT_RT_MILLIS = 50;
+    private static final int ESTIMATED_DISK_DELAY_MILLIS = 10;
+    public static final int FLUSH_DISK_TIME_THRESHOLD_MILLIS = EXPECT_RT_MILLIS - ESTIMATED_DISK_DELAY_MILLIS;
 
     public static final int FLUSH_DISK_BUFFER_SIZE_THRESHOLD = 10 * 1024;
     public static final int INSERT_ALLOCATE_BUF_SIZE = 32 * 1024;

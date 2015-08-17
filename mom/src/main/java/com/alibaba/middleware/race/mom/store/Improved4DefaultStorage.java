@@ -13,10 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.*;
 
 /**
  * Created by slade on 2015/8/8.
@@ -174,24 +171,27 @@ public class Improved4DefaultStorage implements Storage {
         @Override
         public void run() {
             parameter = new InsertTaskParameter();
+            lastFlush = System.currentTimeMillis();
             while (!stop) {
                 try {
                     LinkedList<StorageUnit> list = new LinkedList<StorageUnit>();
-                    list.add(insertionTaskQueue.take());
-                    insertionTaskQueue.drainTo(list);
+                    StorageUnit unit = insertionTaskQueue.poll(5, TimeUnit.MILLISECONDS);
+                    if (unit != null) {
+                        list.add(unit);
+                        insertionTaskQueue.drainTo(list);
 
-                    for (StorageUnit u : list) {
-                        parameter.msgIds.add(u.msgId());
-                        parameter.msgBlock.put(u.msg());
-                        int length = u.msg().capacity();
-                        parameter.offsetStates.add(new OffsetState(offset, length, MessageState.RESEND));
-                        offset += length;
-                        insertBufferSize += length;
+                        for (StorageUnit u : list) {
+                            parameter.msgIds.add(u.msgId());
+                            parameter.msgBlock.put(u.msg());
+                            int length = u.msg().capacity();
+                            parameter.offsetStates.add(new OffsetState(offset, length, MessageState.RESEND));
+                            offset += length;
+                            insertBufferSize += length;
+                        }
                     }
-
-                    long currentNano = System.nanoTime();
+                    long currentNano = System.currentTimeMillis();
                     if (insertBufferSize > Parameter.FLUSH_DISK_BUFFER_SIZE_THRESHOLD
-                            || currentNano - lastFlush > Parameter.FLUSH_DISK_TIME_THRESHOLD) {
+                            || currentNano - lastFlush > Parameter.FLUSH_DISK_TIME_THRESHOLD_MILLIS) {
                         insertBufferSize = 0;
                         lastFlush = currentNano;
 
