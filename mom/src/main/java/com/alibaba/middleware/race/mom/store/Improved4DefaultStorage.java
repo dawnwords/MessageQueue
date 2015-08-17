@@ -28,9 +28,6 @@ public class Improved4DefaultStorage implements Storage {
     private volatile boolean stop = true;
     private AsynchronousFileChannel messageChannel;
 
-    private volatile int insertBufferSize;
-    private volatile long lastFlush;
-
     public void start() {
         if (!stop) {
             throw new IllegalStateException("already started");
@@ -157,6 +154,7 @@ public class Improved4DefaultStorage implements Storage {
 
     private class InsertTaskProducer extends Thread {
         private long offset;
+        private int insertBufferSize;
         private InsertTaskParameter parameter;
 
         public InsertTaskProducer() {
@@ -171,7 +169,7 @@ public class Improved4DefaultStorage implements Storage {
         @Override
         public void run() {
             parameter = new InsertTaskParameter();
-            lastFlush = System.currentTimeMillis();
+            long lastFlush = System.currentTimeMillis();
             while (!stop) {
                 try {
                     LinkedList<StorageUnit> list = new LinkedList<StorageUnit>();
@@ -189,16 +187,18 @@ public class Improved4DefaultStorage implements Storage {
                             insertBufferSize += length;
                         }
                     }
-                    long currentNano = System.currentTimeMillis();
+                    long currentMills = System.currentTimeMillis();
                     if (insertBufferSize > Parameter.FLUSH_DISK_BUFFER_SIZE_THRESHOLD
-                            || currentNano - lastFlush > Parameter.FLUSH_DISK_TIME_THRESHOLD_MILLIS) {
+                            || currentMills - lastFlush > Parameter.FLUSH_DISK_TIME_THRESHOLD_MILLIS) {
                         insertBufferSize = 0;
-                        lastFlush = currentNano;
+                        lastFlush = currentMills;
 
                         parameter.msgBlock.flip();
-                        messageChannel.write(parameter.msgBlock, messageChannel.size(), parameter, new CompletionHandler<Integer, InsertTaskParameter>() {
+//                        final long startTime = System.currentTimeMillis();
+                        messageChannel.write(parameter.msgBlock, offset - insertBufferSize, parameter, new CompletionHandler<Integer, InsertTaskParameter>() {
                             @Override
                             public void completed(Integer result, InsertTaskParameter attachment) {
+//                                System.out.println(System.currentTimeMillis() - startTime);
                                 int i = 0;
                                 for (MessageId msgId : attachment.msgIds) {
                                     headerLookupTable.put(msgId, attachment.offsetStates.get(i++));
