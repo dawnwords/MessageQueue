@@ -33,6 +33,6 @@ public class Parameter {
     private static final int ESTIMATED_DISK_DELAY_MILLIS = 10;
     public static final int FLUSH_DISK_TIME_THRESHOLD_MILLIS = EXPECT_RT_MILLIS - ESTIMATED_DISK_DELAY_MILLIS;
 
-    public static final int FLUSH_DISK_BUFFER_SIZE_THRESHOLD = 10 * 1024;
+    public static final int FLUSH_DISK_BUFFER_SIZE_THRESHOLD = 12 * 1024; /*should be multiple of 4*/
     public static final int INSERT_ALLOCATE_BUF_SIZE = 32 * 1024;
 }
