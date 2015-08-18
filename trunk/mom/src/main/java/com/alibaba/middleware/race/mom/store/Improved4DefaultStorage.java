@@ -190,7 +190,6 @@ public class Improved4DefaultStorage implements Storage {
                     long currentMills = System.currentTimeMillis();
                     if (insertBufferSize > Parameter.FLUSH_DISK_BUFFER_SIZE_THRESHOLD
                             || currentMills - lastFlush > Parameter.FLUSH_DISK_TIME_THRESHOLD_MILLIS) {
-                        insertBufferSize = 0;
                         lastFlush = currentMills;
 
                         parameter.msgBlock.flip();
@@ -214,6 +213,7 @@ public class Improved4DefaultStorage implements Storage {
                                 }
                             }
                         });
+                        insertBufferSize = 0;
                         parameter = new InsertTaskParameter();
                     }
                 } catch (Exception e) {
