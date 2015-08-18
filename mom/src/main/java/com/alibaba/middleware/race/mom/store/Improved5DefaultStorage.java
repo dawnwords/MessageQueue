@@ -180,15 +180,14 @@ public class Improved5DefaultStorage implements Storage {
                         insertionTaskQueue.drainTo(list);
 
                         for (StorageUnit u : list) {
-                            int msgSize = u.msg().position() + 1/* align 4K ? */;
+                            int msgSize = u.msg().capacity() + 1/* align 4K ? */;
                             if (currentPara == null) {
                                 currentPara = new InsertTaskParameter(msgSize);
                             } else {
                                 int remaining = currentPara.msgBlock.remaining();
                                 if (remaining < msgSize) {
                                     if (remaining > 0) {
-                                        currentPara.msgBlock.put((byte) 1); /* align to 4K */
-                                        offset = (offset >> 12) + 1 << 12;
+                                        align4K();
                                     }
                                     finishPara.add(currentPara);
                                     currentPara = new InsertTaskParameter(msgSize);
@@ -196,6 +195,7 @@ public class Improved5DefaultStorage implements Storage {
                             }
                             currentPara.msgIds.add(u.msgId());
                             currentPara.msgBlock.put((byte) 0); /* not align to 4K */
+                            offset++;
                             currentPara.msgBlock.put(u.msg());
                             int length = u.msg().capacity();
                             currentPara.offsetStates.add(new OffsetState(offset, length, MessageState.RESEND));
@@ -207,12 +207,14 @@ public class Improved5DefaultStorage implements Storage {
                     if (currentMills - lastFlush > Parameter.FLUSH_DISK_TIME_THRESHOLD_MILLIS) {
                         lastFlush = currentMills;
                         if (currentPara != null) {
+                            align4K();
                             finishPara.add(currentPara);
                         }
                         currentPara = null;
 
                         for (InsertTaskParameter parameter : finishPara) {
 //                        final long startTime = System.currentTimeMillis();
+                            parameter.msgBlock.position(0);
                             messageChannel.write(parameter.msgBlock, writePosition, parameter, new CompletionHandler<Integer, InsertTaskParameter>() {
                                 @Override
                                 public void completed(Integer result, InsertTaskParameter attachment) {
@@ -222,7 +224,6 @@ public class Improved5DefaultStorage implements Storage {
                                         headerLookupTable.put(msgId, attachment.offsetStates.get(i++));
                                         insertionStateTable.get(msgId).complete(true);
                                     }
-
                                 }
 
                                 @Override
@@ -234,11 +235,17 @@ public class Improved5DefaultStorage implements Storage {
                             });
                             writePosition += parameter.msgBlock.capacity();
                         }
+                        finishPara.clear();
                     }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
             }
+        }
+
+        private void align4K() {
+            currentPara.msgBlock.put((byte) 1); /* align to 4K */
+            offset = (offset >> 12) + 1 << 12;
         }
     }
 
