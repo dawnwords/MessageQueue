@@ -20,7 +20,7 @@ public class Parameter {
     public static final int SND_BUF_SIZE = 65535;
     public static final int RCV_BUF_SIZE = 65535;
 
-    public static final Storage STORAGE = new com.alibaba.middleware.race.mom.store.Improved5DefaultStorage();
+    public static final Storage STORAGE = new com.alibaba.middleware.race.mom.store.Improved6DefaultStorage();
 
     public static final int RESEND_NUM = 100;
 
