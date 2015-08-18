@@ -38,10 +38,9 @@ public class StorageUnit {
 
     public MessageId msgId() {
         byte[] msgIdBytes = new byte[MessageId.LENGTH];
-        msg.mark();
         msg.position(0);
         msg.get(msgIdBytes);
-        msg.reset();
+        msg.position(0);
         return new MessageId(msgIdBytes);
     }
 
