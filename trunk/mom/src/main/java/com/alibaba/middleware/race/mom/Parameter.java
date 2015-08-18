@@ -20,7 +20,7 @@ public class Parameter {
     public static final int SND_BUF_SIZE = 65535;
     public static final int RCV_BUF_SIZE = 65535;
 
-    public static final Storage STORAGE = new com.alibaba.middleware.race.mom.store.Improved4DefaultStorage();
+    public static final Storage STORAGE = new com.alibaba.middleware.race.mom.store.Improved5DefaultStorage();
 
     public static final int RESEND_NUM = 100;
 
@@ -29,7 +29,7 @@ public class Parameter {
     public static final int INDEX_LOAD_BUFF_SIZE = StorageUnit.HEADER_LENGTH * 1024;
     public static final int MESSAGE_WORKER_THREAD = PROCESSORS * 2;
 
-    private static final int EXPECT_RT_MILLIS = 50;
+    private static final int EXPECT_RT_MILLIS = 60;
     private static final int ESTIMATED_DISK_DELAY_MILLIS = 10;
     public static final int FLUSH_DISK_TIME_THRESHOLD_MILLIS = EXPECT_RT_MILLIS - ESTIMATED_DISK_DELAY_MILLIS;
 
