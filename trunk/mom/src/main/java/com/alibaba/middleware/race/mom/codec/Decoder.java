@@ -1,7 +1,6 @@
 package com.alibaba.middleware.race.mom.codec;
 
 import com.alibaba.middleware.race.mom.bean.*;
-import com.alibaba.middleware.race.mom.util.ThroughputMonitor;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
